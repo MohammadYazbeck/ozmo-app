@@ -20,6 +20,13 @@ type ActivityRow = {
   occurred_on: string;
 };
 
+type KpiRow = {
+  id: number;
+  goal: string;
+  is_completed: number;
+  completed_at: string | null;
+};
+
 export async function GET(request: Request) {
   try {
     const user = await requirePortalUser(request);
@@ -33,7 +40,7 @@ export async function GET(request: Request) {
     const database = getD1();
     const monthStart = `${month}-01`;
     const monthEnd = nextMonthStart(month);
-    const [inventory, monthly, activity, session, logo] = await Promise.all([
+    const [inventory, monthly, activity, session, logo, goals] = await Promise.all([
       database
         .prepare(
           `SELECT
@@ -97,6 +104,15 @@ export async function GET(request: Request) {
         .prepare("SELECT updated_at FROM client_logos WHERE client_id=?")
         .bind(user.clientId)
         .first<{ updated_at: string }>(),
+      database
+        .prepare(
+          `SELECT id,goal,is_completed,completed_at
+           FROM client_monthly_kpis
+           WHERE client_id=? AND month=?
+           ORDER BY id`,
+        )
+        .bind(user.clientId, month)
+        .all<KpiRow>(),
     ]);
 
     return Response.json(
@@ -128,6 +144,12 @@ export async function GET(request: Request) {
               status: session.status,
             }
           : null,
+        monthlyKpis: goals.results.map((goal) => ({
+          id: String(goal.id),
+          goal: goal.goal,
+          completed: Boolean(goal.is_completed),
+          completedAt: goal.completed_at,
+        })),
         recentActivity: activity.results.map((item) => ({
           id: String(item.id),
           action: item.task_type,

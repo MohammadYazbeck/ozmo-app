@@ -93,6 +93,30 @@ export const clientLogos = sqliteTable("client_logos", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const clientMonthlyKpis = sqliteTable(
+  "client_monthly_kpis",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    goal: text("goal").notNull(),
+    isCompleted: integer("is_completed", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("client_monthly_kpis_client_month_idx").on(
+      table.clientId,
+      table.month,
+    ),
+  ],
+);
+
 export const reports = sqliteTable(
   "reports",
   {

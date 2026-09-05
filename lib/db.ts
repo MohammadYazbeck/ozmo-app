@@ -308,6 +308,16 @@ async function initializeDatabase(): Promise<void> {
       blocked_until TEXT,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS client_monthly_kpis (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      month TEXT NOT NULL CHECK (month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
+      goal TEXT NOT NULL,
+      is_completed INTEGER NOT NULL DEFAULT 0 CHECK (is_completed IN (0,1)),
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
     "CREATE INDEX IF NOT EXISTS users_role_idx ON users(role)",
     "CREATE INDEX IF NOT EXISTS clients_active_idx ON clients(is_active)",
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_name_nocase_unique ON clients(name COLLATE NOCASE)",
@@ -340,6 +350,7 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_user_idx ON portal_auth_sessions(portal_user_id)",
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_expiry_idx ON portal_auth_sessions(expires_at)",
     "CREATE INDEX IF NOT EXISTS portal_login_attempts_updated_idx ON portal_login_attempts(updated_at)",
+    "CREATE INDEX IF NOT EXISTS client_monthly_kpis_client_month_idx ON client_monthly_kpis(client_id,month)",
   ];
 
   await database.batch(

@@ -51,6 +51,16 @@ type Client = {
   logoUrl?: string | null;
 };
 
+type MonthlyKpi = {
+  id: string;
+  clientId: string;
+  month: string;
+  goal: string;
+  completed: boolean;
+  completedAt?: string | null;
+  createdAt: string;
+};
+
 type ReportTask = {
   id?: string;
   clientId: string;
@@ -2317,8 +2327,99 @@ function ClientsPage({
   const [portalMessage, setPortalMessage] = useState("");
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoMessage, setLogoMessage] = useState("");
+  const [kpiMonth, setKpiMonth] = useState(todayInDamascus().slice(0, 7));
+  const [kpiGoal, setKpiGoal] = useState("");
+  const [kpis, setKpis] = useState<MonthlyKpi[]>([]);
+  const [kpiBusy, setKpiBusy] = useState(false);
+  const [kpiMessage, setKpiMessage] = useState("");
   const client = clients.find((item) => item.id === selected) ?? clients[0];
   const clientHistory = history.filter((item) => item.clientName === client?.name);
+
+  const loadKpis = useCallback(async () => {
+    if (!client) {
+      setKpis([]);
+      return;
+    }
+    setKpiBusy(true);
+    setError("");
+    try {
+      const result = await api<{ goals: MonthlyKpi[] }>(
+        `/api/admin/client-kpis?clientId=${encodeURIComponent(client.id)}&month=${encodeURIComponent(kpiMonth)}`,
+      );
+      setKpis(result.goals);
+    } catch (loadError) {
+      setError((loadError as Error).message);
+    } finally {
+      setKpiBusy(false);
+    }
+  }, [client, kpiMonth]);
+
+  useEffect(() => {
+    setKpiMessage("");
+    void loadKpis();
+  }, [loadKpis]);
+
+  async function addKpi(event: FormEvent) {
+    event.preventDefault();
+    if (!client) return;
+    setKpiBusy(true);
+    setError("");
+    setKpiMessage("");
+    try {
+      await api("/api/admin/client-kpis", {
+        method: "POST",
+        body: JSON.stringify({ clientId: client.id, month: kpiMonth, goal: kpiGoal }),
+      });
+      setKpiGoal("");
+      await loadKpis();
+      setKpiMessage("Monthly KPI goal added and published to the client portal.");
+    } catch (saveError) {
+      setError((saveError as Error).message);
+    } finally {
+      setKpiBusy(false);
+    }
+  }
+
+  async function toggleKpi(goal: MonthlyKpi) {
+    setKpiBusy(true);
+    setError("");
+    setKpiMessage("");
+    try {
+      await api("/api/admin/client-kpis", {
+        method: "PATCH",
+        body: JSON.stringify({ id: goal.id, completed: !goal.completed }),
+      });
+      await loadKpis();
+      setKpiMessage(
+        goal.completed
+          ? "KPI goal reopened in the team and client portal."
+          : "KPI goal marked as achieved in the team and client portal.",
+      );
+    } catch (saveError) {
+      setError((saveError as Error).message);
+    } finally {
+      setKpiBusy(false);
+    }
+  }
+
+  async function removeKpi(goal: MonthlyKpi) {
+    if (!window.confirm(`Delete this KPI goal?\n\n${goal.goal}`)) return;
+    setKpiBusy(true);
+    setError("");
+    setKpiMessage("");
+    try {
+      await api("/api/admin/client-kpis", {
+        method: "DELETE",
+        body: JSON.stringify({ id: goal.id }),
+      });
+      await loadKpis();
+      setKpiMessage("KPI goal deleted.");
+    } catch (saveError) {
+      setError((saveError as Error).message);
+    } finally {
+      setKpiBusy(false);
+    }
+  }
 
   async function addClient(event: FormEvent) {
     event.preventDefault();
@@ -2649,6 +2750,72 @@ function ClientsPage({
               {portalBusy ? "Saving…" : "Save portal access"}
             </button>
           </form>
+          <section className="content-card client-kpi-card">
+            <header className="section-header client-kpi-header">
+              <div>
+                <span className="eyebrow">Monthly goals</span>
+                <h2>KPI goals</h2>
+                <p>Set measurable goals for {client.name}, then check them when the target is reached.</p>
+              </div>
+              <label className="client-kpi-month">
+                Month
+                <input
+                  type="month"
+                  value={kpiMonth}
+                  onChange={(event) => setKpiMonth(event.target.value)}
+                />
+              </label>
+            </header>
+            <form className="client-kpi-add" onSubmit={addKpi}>
+              <label>
+                KPI goal
+                <input
+                  value={kpiGoal}
+                  onChange={(event) => setKpiGoal(event.target.value)}
+                  placeholder="Example: Raise follower views by 10%"
+                  maxLength={240}
+                  required
+                />
+              </label>
+              <button className="button button-primary" disabled={kpiBusy || kpiGoal.trim().length < 3}>
+                {kpiBusy ? "Saving…" : "Add KPI goal"}
+              </button>
+            </form>
+            {kpiMessage && <div className="form-success">{kpiMessage}</div>}
+            <div className="client-kpi-list" aria-live="polite">
+              {kpiBusy && kpis.length === 0 ? (
+                <p className="client-kpi-empty">Loading KPI goals…</p>
+              ) : kpis.length === 0 ? (
+                <p className="client-kpi-empty">No KPI goals set for this month yet.</p>
+              ) : (
+                kpis.map((goal) => (
+                  <div className={`client-kpi-item ${goal.completed ? "completed" : ""}`} key={goal.id}>
+                    <button
+                      className="client-kpi-check"
+                      type="button"
+                      aria-pressed={goal.completed}
+                      disabled={kpiBusy}
+                      onClick={() => void toggleKpi(goal)}
+                    >
+                      <span className="client-kpi-checkmark" aria-hidden="true">
+                        {goal.completed ? <Icon name="check" size={17} /> : <span />}
+                      </span>
+                      <span className="client-kpi-copy">
+                        <strong>{goal.goal}</strong>
+                        <small>{goal.completed ? "Target achieved" : "In progress"}</small>
+                      </span>
+                      <span className="client-kpi-action">
+                        {goal.completed ? "Achieved" : "Mark as achieved"}
+                      </span>
+                    </button>
+                    <button className="button button-secondary" type="button" disabled={kpiBusy} onClick={() => void removeKpi(goal)}>
+                      Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
           <section className="content-card">
             <header className="section-header">
               <div>

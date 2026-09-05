@@ -495,6 +495,72 @@
   font-weight: 750;
 }
 
+.kpiCard {
+  margin-top: 20px;
+}
+
+.kpiProgress {
+  padding: 7px 11px;
+  color: #44516a;
+  background: #f0f3f8;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.kpiList {
+  display: grid;
+  gap: 10px;
+}
+
+.kpiItem {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 16px;
+  background: #f8fafc;
+  border: 1px solid #e8ecf2;
+  border-radius: 15px;
+}
+
+.kpiItem > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #7a8598;
+  background: white;
+  border: 1px solid #dce2eb;
+  border-radius: 50%;
+  font-weight: 900;
+}
+
+.kpiItem > div {
+  display: grid;
+  gap: 4px;
+}
+
+.kpiItem small {
+  color: var(--portal-muted);
+  font-size: 10px;
+}
+
+.kpiCompleted {
+  background: #eefaf5;
+  border-color: #bde8d5;
+}
+
+.kpiCompleted > span {
+  color: white;
+  background: var(--portal-green);
+  border-color: var(--portal-green);
+}
+
+.kpiCompleted strong {
+  color: #147353;
+}
+
 .pipeline {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

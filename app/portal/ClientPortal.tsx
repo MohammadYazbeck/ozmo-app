@@ -35,6 +35,12 @@ type PortalSummary = {
     scheduledAt: string;
     status: string;
   } | null;
+  monthlyKpis: Array<{
+    id: string;
+    goal: string;
+    completed: boolean;
+    completedAt: string | null;
+  }>;
   recentActivity: Array<{
     id: string;
     action: string;
@@ -244,6 +250,26 @@ function Overview({ summary, accounting, onNavigate }: { summary: PortalSummary;
         {summary.upcomingSession ? <div className={styles.session}><span>◷</span><strong>{formatDate(summary.upcomingSession.scheduledAt, true)}</strong><p>جلسة تصوير مجدولة مع فريق OZMO</p></div> : <Empty text="لا توجد جلسة تصوير مجدولة حالياً." />}
       </article>
     </section>
+    <article className={`${styles.card} ${styles.kpiCard}`}>
+      <header>
+        <div><small>أهداف الشهر</small><h2>مؤشرات الأداء الرئيسية</h2></div>
+        <span className={styles.kpiProgress}>
+          {summary.monthlyKpis.filter((goal) => goal.completed).length} / {summary.monthlyKpis.length} مكتمل
+        </span>
+      </header>
+      {summary.monthlyKpis.length === 0 ? (
+        <Empty text="لم يحدد فريق OZMO أهداف مؤشرات أداء لهذا الشهر بعد." />
+      ) : (
+        <div className={styles.kpiList}>
+          {summary.monthlyKpis.map((goal) => (
+            <div className={`${styles.kpiItem} ${goal.completed ? styles.kpiCompleted : ""}`} key={goal.id}>
+              <span aria-hidden="true">{goal.completed ? "✓" : "○"}</span>
+              <div><strong>{goal.goal}</strong><small>{goal.completed ? "تم تحقيق الهدف" : "قيد العمل"}</small></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
   </div>;
 }
 
