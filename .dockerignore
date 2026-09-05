@@ -1,0 +1,16 @@
+.git
+.next
+.wrangler
+.vinext
+.certs
+build
+data
+migration
+dist
+node_modules
+outputs
+work
+*.zip
+._*
+**/._*
+npm-debug.log*

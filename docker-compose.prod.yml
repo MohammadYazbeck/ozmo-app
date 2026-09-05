@@ -1,0 +1,86 @@
+services:
+  web:
+    image: ozmo-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ozmo-app-web
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      OZMO_DATABASE_PATH: /app/data/ozmo.sqlite
+      OZMO_FORCE_SECURE_COOKIES: "1"
+    volumes:
+      - ozmo-app-data:/app/data
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.ozmo-app.rule=Host(`${APP_DOMAIN:-team.ozmo.media}`)"
+      - "traefik.http.routers.ozmo-app.entrypoints=websecure"
+      - "traefik.http.routers.ozmo-app.tls=true"
+      - "traefik.http.routers.ozmo-app.tls.certresolver=lets"
+      - "traefik.http.services.ozmo-app.loadbalancer.server.port=3000"
+      - "traefik.http.routers.ozmo-portal.rule=Host(`${PORTAL_DOMAIN:-portal.ozmo.media}`)"
+      - "traefik.http.routers.ozmo-portal.entrypoints=websecure"
+      - "traefik.http.routers.ozmo-portal.tls=true"
+      - "traefik.http.routers.ozmo-portal.tls.certresolver=lets"
+      - "traefik.http.routers.ozmo-portal.service=ozmo-app"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  scheduler:
+    image: ozmo-app:latest
+    container_name: ozmo-app-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      OZMO_BASE_URL: http://web:3000
+      OZMO_ALLOW_PUBLIC_SCHEDULER_URL: "1"
+    command: ["node", "scripts/local-scheduler.mjs"]
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - internal
+
+  migrate:
+    image: ozmo-app:latest
+    profiles: ["tools"]
+    user: node
+    volumes:
+      - ozmo-app-data:/app/data
+      - ./migration:/migration:ro
+    command:
+      [
+        "node",
+        "scripts/import-d1-database.mjs",
+        "--import",
+        "/migration/ozmo.sqlite",
+        "--to",
+        "/app/data/ozmo.sqlite",
+      ]
+
+networks:
+  web:
+    external: true
+  internal:
+    internal: true
+
+volumes:
+  ozmo-app-data:

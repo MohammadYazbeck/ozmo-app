@@ -1,0 +1,41 @@
+OZMO WINDOWS 10 HOST UPDATE - 192.168.1.211
+================================================
+
+This update keeps the original 192.168.1.196 launcher and certificate.
+It adds a separate Windows-only HTTPS profile for 192.168.1.211.
+It also includes the latest OZMO client management and non-client report work.
+
+BEFORE INSTALLING
+
+1. Stop OZMO on every computer. Only one OZMO host may run at a time.
+2. Back up the complete Windows OZMO folder, including the hidden:
+   - .wrangler\state folder (company data)
+   - .certs folder (office certificates)
+3. Reserve 192.168.1.211 for the Windows laptop in the office router.
+
+INSTALL
+
+1. Extract this ZIP into the existing OZMO project folder.
+2. Allow Windows to merge the included folders and replace the included
+   scripts. The ZIP does not include or replace .wrangler\state.
+3. Double-click:
+   Start OZMO Host - Windows 10 - 192.168.1.211.bat
+4. If Windows Firewall asks, allow Node.js on Private networks only.
+
+ADDRESSES
+
+Application:  https://192.168.1.211:3000
+Device setup: http://192.168.1.211:3001
+
+NOTIFICATIONS
+
+The trusted OZMO office CA is unchanged, so devices that already trust it do
+not need a different CA. However, 192.168.1.211 is a new website address.
+Each employee must open the new address and enable notifications again.
+
+SECURITY
+
+This package contains the Windows server certificate and its private server
+key. Keep it inside the private OZMO project folder. It does not contain the
+office CA private key or any reports, inventory, tasks, sessions, passwords,
+push subscriptions, or other company database content.

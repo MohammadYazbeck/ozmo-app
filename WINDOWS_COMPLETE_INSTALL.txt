@@ -1,0 +1,98 @@
+OZMO COMPLETE WINDOWS 10 HOST - 192.168.1.211
+================================================
+
+This is the complete Windows application package. It includes:
+
+- The current OZMO website and all recent features.
+- A verified prebuilt copy of the application for fast daily startup.
+- The HTTPS certificate profile for 192.168.1.211.
+- A Windows host supervisor that prevents idle sleep.
+- Automatic restart if an OZMO service exits unexpectedly.
+- A rotating Windows host log for troubleshooting.
+
+IMPORTANT: KEEP YOUR EXISTING COMPANY DATA
+
+This package deliberately does not contain a .wrangler folder. That folder is
+where your Windows host keeps reports, inventory, tasks, sessions, users,
+passwords, settings, and push subscriptions.
+
+Before updating:
+
+1. Stop the old OZMO host window.
+2. Back up the complete existing OZMO folder.
+3. Do not delete or rename the existing .wrangler folder.
+
+RECOMMENDED WINDOWS LOCATION
+
+Use:
+
+C:\OZMO
+
+Do not run the host from OneDrive, Dropbox, Desktop, Documents, a network share,
+or another synchronized folder. Synchronization can partially rewrite the
+prebuilt application while the server is using it.
+
+To update in the same existing Windows folder:
+
+1. Extract the ZIP.
+2. Copy everything inside the OZMO-Windows-192.168.1.211 folder into the
+   existing OZMO project folder.
+3. Allow Windows to merge folders and replace application files.
+4. Confirm the existing .wrangler folder is still present.
+5. Double-click:
+   Start OZMO Host - Windows 10 - 192.168.1.211.bat
+
+To move the host to the recommended C:\OZMO folder:
+
+1. Stop the old OZMO host window.
+2. Extract the ZIP and move OZMO-Windows-192.168.1.211 to C:\OZMO.
+3. Copy the complete .wrangler folder from the old OZMO folder into C:\OZMO.
+   Both old and new hosts must remain stopped while this folder is copied.
+4. Confirm C:\OZMO\.wrangler is present.
+5. Double-click the Windows launcher inside C:\OZMO.
+
+Never use a mirror or delete operation when moving .wrangler. Keep the old
+folder as a backup until the new host is confirmed working.
+
+WINDOWS REQUIREMENTS
+
+- Reserve 192.168.1.211 for this laptop in the office router.
+- Install Node.js 22.13.0 or newer.
+- Install pnpm by running: npm install --global pnpm
+- Install Git for Windows.
+- If Windows Firewall asks, allow Node.js on Private networks only.
+- Keep the host window open.
+- Keep the laptop lid open. If the laptop must run with its lid closed, set
+  Windows "When I close the lid" to "Do nothing" while plugged in.
+- Run only one OZMO host computer at a time.
+
+The first start in a new C:\OZMO folder installs the Windows dependencies and
+can take several minutes. Keep the window open until it finishes. Later daily
+starts verify those dependencies and use the included prebuilt application.
+
+STABILITY AND LOGGING
+
+While the host window is open, OZMO prevents normal idle sleep. If the website,
+reminder service, or device-setup service exits, it restarts automatically
+with a short delay. Normal daily startup uses the included prebuilt application
+and does not wait for a new build. The launcher verifies both the dependencies
+and critical build files before starting. If five startup attempts fail quickly,
+it pauses instead of looping forever and leaves the exact error in the log.
+
+The permanent troubleshooting log is:
+
+%LOCALAPPDATA%\OZMO\logs\host.log
+
+Paste that address into File Explorer. If OZMO still stops, send that log file
+with the time the problem happened.
+
+OFFICE ADDRESSES
+
+Application:  https://192.168.1.211:3000
+Device setup: http://192.168.1.211:3001
+
+SECURITY
+
+This package contains the Windows HTTPS server private key because the host
+needs it to serve the secure site. Keep the package and project folder private.
+It does not contain the OZMO office CA private key or company database.

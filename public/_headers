@@ -1,0 +1,9 @@
+/ozmo-office-ca-android.cer
+  Content-Type: application/pkix-cert
+  Content-Disposition: attachment; filename="ozmo-office-ca-android.cer"
+  Cache-Control: no-store
+
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
