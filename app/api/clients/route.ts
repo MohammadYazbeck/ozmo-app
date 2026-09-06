@@ -11,6 +11,8 @@ type ClientInventoryRow = {
   ozmo_client_id: string;
   name: string;
   session_reel_threshold: number;
+  remaining_payment_cents: number;
+  remaining_payment_currency: string;
   updated_at: string;
   shot_reel_count: number;
   reel_count: number;
@@ -38,7 +40,8 @@ export async function GET(request: Request) {
       database
         .prepare(
           `SELECT
-             c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,c.updated_at,
+             c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+             c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
              COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -47,7 +50,8 @@ export async function GET(request: Request) {
            FROM clients c
            LEFT JOIN inventory_balances b ON b.client_id=c.id
            WHERE c.is_active=1
-           GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,c.updated_at
+           GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+                    c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
            ORDER BY c.id`,
         )
         .all<ClientInventoryRow>(),
@@ -76,6 +80,8 @@ export async function GET(request: Request) {
         postCount: canViewAllInventory ? Number(client.post_count) : 0,
         draftCount: canViewAllInventory ? Number(client.draft_count) : 0,
         sessionThreshold: client.session_reel_threshold,
+        remainingPaymentCents: Number(client.remaining_payment_cents ?? 0),
+        remainingPaymentCurrency: client.remaining_payment_currency || "USD",
         postThreshold: canViewAllInventory ? postThreshold : null,
         draftThreshold: canViewAllInventory ? draftThreshold : null,
         needsSession:
@@ -211,7 +217,8 @@ export async function POST(request: Request) {
     const created = await database
       .prepare(
         `SELECT
-           c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,c.updated_at,
+           c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+           c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -220,7 +227,8 @@ export async function POST(request: Request) {
          FROM clients c
          LEFT JOIN inventory_balances b ON b.client_id=c.id
          WHERE c.name=? COLLATE NOCASE AND c.is_active=1
-         GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,c.updated_at
+         GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+                  c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
          LIMIT 1`,
       )
       .bind(name)
@@ -238,6 +246,8 @@ export async function POST(request: Request) {
           postCount: Number(created.post_count),
           draftCount: Number(created.draft_count),
           sessionThreshold: created.session_reel_threshold,
+          remainingPaymentCents: Number(created.remaining_payment_cents ?? 0),
+          remainingPaymentCurrency: created.remaining_payment_currency || "USD",
           needsSession: false,
           updatedAt: created.updated_at,
           logoUrl: clientLogoUrl(created.id, created.logo_updated_at),
@@ -246,6 +256,150 @@ export async function POST(request: Request) {
       },
       { status: existing ? 200 : 201 },
     );
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    await requireAdmin(request);
+    await ensureDatabase();
+    const body = (await request.json().catch(() => null)) as {
+      id?: unknown;
+      name?: unknown;
+      sessionThreshold?: unknown;
+      remainingPaymentCents?: unknown;
+      remainingPaymentCurrency?: unknown;
+    } | null;
+    const clientId = Number(body?.id);
+    if (!Number.isSafeInteger(clientId) || clientId < 1) {
+      throw new AuthError(400, "INVALID_CLIENT", "Choose a valid client to edit.");
+    }
+    const name =
+      typeof body?.name === "string"
+        ? body.name.trim().replace(/\s+/g, " ").toUpperCase()
+        : "";
+    if (name.length < 2 || name.length > 80 || /[\u0000-\u001f\u007f]/.test(name)) {
+      throw new AuthError(
+        400,
+        "INVALID_CLIENT_NAME",
+        "Client name must contain 2–80 visible characters.",
+      );
+    }
+    if (name === "OTHER") {
+      throw new AuthError(
+        400,
+        "RESERVED_CLIENT_NAME",
+        "Other is reserved for non-client work. Enter the real client name instead.",
+      );
+    }
+    const sessionThreshold = Number(body?.sessionThreshold);
+    if (
+      !Number.isSafeInteger(sessionThreshold) ||
+      sessionThreshold < 0 ||
+      sessionThreshold > 100
+    ) {
+      throw new AuthError(
+        400,
+        "INVALID_SESSION_THRESHOLD",
+        "Session threshold must be a whole number from 0 to 100.",
+      );
+    }
+    const remainingPaymentCents = Number(body?.remainingPaymentCents ?? 0);
+    if (
+      !Number.isSafeInteger(remainingPaymentCents) ||
+      remainingPaymentCents < 0 ||
+      remainingPaymentCents > 100_000_000_00
+    ) {
+      throw new AuthError(
+        400,
+        "INVALID_REMAINING_PAYMENT",
+        "Remaining payment must be a non-negative amount.",
+      );
+    }
+    const remainingPaymentCurrency =
+      typeof body?.remainingPaymentCurrency === "string"
+        ? body.remainingPaymentCurrency.trim().toUpperCase()
+        : "USD";
+    if (!/^[A-Z]{3}$/.test(remainingPaymentCurrency)) {
+      throw new AuthError(
+        400,
+        "INVALID_PAYMENT_CURRENCY",
+        "Choose a valid three-letter payment currency.",
+      );
+    }
+
+    const database = getD1();
+    const existing = await database
+      .prepare("SELECT id FROM clients WHERE id=? AND is_active=1 LIMIT 1")
+      .bind(clientId)
+      .first<{ id: number }>();
+    if (!existing) {
+      throw new AuthError(404, "CLIENT_NOT_FOUND", "That active client was not found.");
+    }
+    const duplicate = await database
+      .prepare(
+        "SELECT id FROM clients WHERE name=? COLLATE NOCASE AND id<>? LIMIT 1",
+      )
+      .bind(name, clientId)
+      .first<{ id: number }>();
+    if (duplicate) {
+      throw new AuthError(409, "CLIENT_EXISTS", "A client with this name already exists.");
+    }
+    await database
+      .prepare(
+        `UPDATE clients
+         SET name=?,session_reel_threshold=?,remaining_payment_cents=?,
+             remaining_payment_currency=?,updated_at=CURRENT_TIMESTAMP
+         WHERE id=? AND is_active=1`,
+      )
+      .bind(
+        name,
+        sessionThreshold,
+        remainingPaymentCents,
+        remainingPaymentCurrency,
+        clientId,
+      )
+      .run();
+
+    const updated = await database
+      .prepare(
+        `SELECT
+           c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+           c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
+           COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
+           COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
+           COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+           COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count,
+           (SELECT updated_at FROM client_logos l WHERE l.client_id=c.id) AS logo_updated_at
+         FROM clients c
+         LEFT JOIN inventory_balances b ON b.client_id=c.id
+         WHERE c.id=? AND c.is_active=1
+         GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
+                  c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
+         LIMIT 1`,
+      )
+      .bind(clientId)
+      .first<ClientInventoryRow>();
+    if (!updated) throw new Error("The client could not be loaded after editing.");
+    return Response.json({
+      client: {
+        id: String(updated.id),
+        ozmoClientId: updated.ozmo_client_id,
+        name: updated.name,
+        shotReelCount: Number(updated.shot_reel_count),
+        reelCount: Number(updated.reel_count),
+        postCount: Number(updated.post_count),
+        draftCount: Number(updated.draft_count),
+        sessionThreshold: updated.session_reel_threshold,
+        remainingPaymentCents: Number(updated.remaining_payment_cents ?? 0),
+        remainingPaymentCurrency: updated.remaining_payment_currency || "USD",
+        needsSession: false,
+        updatedAt: updated.updated_at,
+        logoUrl: clientLogoUrl(updated.id, updated.logo_updated_at),
+      },
+    });
   } catch (error) {
     return authErrorResponse(error);
   }

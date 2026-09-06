@@ -114,6 +114,8 @@ async function initializeDatabase(): Promise<void> {
       name TEXT NOT NULL UNIQUE,
       is_active INTEGER NOT NULL DEFAULT 1,
       session_reel_threshold INTEGER NOT NULL DEFAULT 4,
+      remaining_payment_cents INTEGER NOT NULL DEFAULT 0,
+      remaining_payment_currency TEXT NOT NULL DEFAULT 'USD',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -364,6 +366,18 @@ async function initializeDatabase(): Promise<void> {
     "INTEGER NOT NULL DEFAULT 0",
   );
   await ensureColumn(database, "clients", "ozmo_client_id", "TEXT");
+  await ensureColumn(
+    database,
+    "clients",
+    "remaining_payment_cents",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  await ensureColumn(
+    database,
+    "clients",
+    "remaining_payment_currency",
+    "TEXT NOT NULL DEFAULT 'USD'",
+  );
   await ensureColumn(database, "sessions", "reels_shot", "INTEGER");
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);

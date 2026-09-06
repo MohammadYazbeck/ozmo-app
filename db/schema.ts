@@ -75,6 +75,12 @@ export const clients = sqliteTable(
     sessionReelThreshold: integer("session_reel_threshold")
       .notNull()
       .default(4),
+    remainingPaymentCents: integer("remaining_payment_cents")
+      .notNull()
+      .default(0),
+    remainingPaymentCurrency: text("remaining_payment_currency")
+      .notNull()
+      .default("USD"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },

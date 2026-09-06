@@ -44,6 +44,8 @@ type Client = {
   postCount: number;
   draftCount: number;
   sessionThreshold: number;
+  remainingPaymentCents: number;
+  remainingPaymentCurrency: string;
   postThreshold?: number | null;
   draftThreshold?: number | null;
   needsSession: boolean;
@@ -170,6 +172,18 @@ type DashboardData = {
   upcomingSessions: SessionItem[];
 };
 
+type AdminReport = {
+  id: string;
+  userId: string;
+  reportDate: string;
+  status: "draft" | "submitted";
+  summary: string;
+  submittedAt?: string | null;
+  displayName: string;
+  role: Exclude<Role, "admin">;
+  tasks: ReportTask[];
+};
+
 type HistoryItem = {
   id: string;
   date: string;
@@ -218,6 +232,7 @@ type StaffSchedule = {
 
 type AppSection =
   | "home"
+  | "reports"
   | "inventory"
   | "clients"
   | "sessions"
@@ -2030,6 +2045,70 @@ function AdminDashboard({
   );
 }
 
+function AdminReportsPage({ clients }: { clients: Client[] }) {
+  const [date, setDate] = useState(todayInDamascus());
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [tasks, setTasks] = useState<ReportTask[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const selected = reports.find((report) => report.id === selectedId);
+
+  const loadReports = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ reports: AdminReport[] }>(`/api/admin/reports?date=${encodeURIComponent(date)}`);
+      setReports(result.reports);
+      const next = result.reports.find((report) => report.id === selectedId) ?? result.reports[0];
+      setSelectedId(next?.id ?? "");
+      setTasks(next?.tasks ?? []);
+    } catch (loadError) {
+      setError((loadError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [date, selectedId]);
+
+  useEffect(() => { void loadReports(); }, [loadReports]);
+  useEffect(() => {
+    const next = reports.find((report) => report.id === selectedId);
+    setTasks(next?.tasks ?? []);
+  }, [reports, selectedId]);
+
+  function changeTask(index: number, patch: Partial<ReportTask>) {
+    setTasks((current) => current.map((task, taskIndex) => taskIndex === index ? { ...task, ...patch } : task));
+  }
+
+  async function saveReport(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/admin/reports", { method: "PATCH", body: JSON.stringify({ reportId: selected.id, tasks }) });
+      setMessage(`Report for ${selected.displayName} was updated and inventory effects were recalculated.`);
+      await loadReports();
+    } catch (saveError) {
+      setError((saveError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <div className="page-stack">
+    <PageHeading eyebrow="Daily reports" title="Review and correct staff reports" copy="Edit a submitted report when work was missed. The inventory change is applied under the original staff member." action={<label className="archive-month-field">Report date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>} />
+    {error && <div className="form-error">{error}</div>}
+    {message && <div className="form-success">{message}</div>}
+    <section className="dashboard-grid">
+      <article className="content-card submission-card"><header className="section-header"><div><span className="eyebrow">Team reports</span><h2>{date}</h2></div><button className="button button-secondary" type="button" onClick={() => void loadReports()} disabled={busy}><Icon name="refresh" size={16} /> Refresh</button></header><div className="team-status-list">{reports.length ? reports.map((report) => <button className={`team-status-row ${report.id === selectedId ? "is-selected" : ""}`} key={report.id} type="button" onClick={() => setSelectedId(report.id)}><span className={`avatar avatar-${report.role}`}>{initials(report.displayName)}</span><div><strong>{report.displayName}</strong><small>{ROLE_LABELS[report.role]}</small></div><span className={`status-chip status-${report.status}`}>{report.status === "submitted" ? "Submitted" : "Draft"}</span></button>) : <div className="empty-state compact"><strong>No reports for this date</strong><p>Choose another date or wait for a staff report.</p></div>}</div></article>
+      {selected ? <form className="content-card report-admin-editor" onSubmit={saveReport}><header className="section-header"><div><span className="eyebrow">{selected.displayName} · {ROLE_LABELS[selected.role]}</span><h2>{selected.status === "submitted" ? "Edit submitted report" : "Edit draft report"}</h2></div><span className="status-chip status-submitted">{selected.reportDate}</span></header><div className="admin-report-tasks">{tasks.map((task, index) => { const actions = ACTIONS[selected.role]; const action = actions.find((item) => item.value === task.actionType) ?? actions[0]; return <div className="task-editor" key={task.id ?? index}><div className="task-editor-heading"><strong>Task {index + 1}</strong><button className="text-button danger" type="button" onClick={() => setTasks((current) => current.filter((_, taskIndex) => taskIndex !== index))}>Remove</button></div><label>Action<select value={task.actionType} onChange={(event) => changeTask(index, { actionType: event.target.value, clientId: action?.scope === "agency" ? "" : task.clientId })}>{actions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{action?.scope !== "agency" && <label>Client<select value={task.clientId} onChange={(event) => changeTask(index, { clientId: event.target.value })}><option value="">Choose client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}<option value={OTHER_CLIENT_ID}>Other / Non-client work</option></select></label>}<div className="task-editor-fields"><label>Status<select value={task.status} onChange={(event) => changeTask(index, { status: event.target.value as ReportTask["status"] })}><option value="completed">Completed</option><option value="in_progress">In progress</option></select></label><label>Quantity<input type="number" min={1} max={50} value={task.quantity} onChange={(event) => changeTask(index, { quantity: Number(event.target.value) })} /></label></div><label>Notes<textarea rows={2} value={task.notes} onChange={(event) => changeTask(index, { notes: event.target.value })} /></label></div>; })}</div><div className="report-admin-actions"><button className="button button-secondary" type="button" onClick={() => setTasks((current) => [...current, newTask(selected.role, clients[0]?.id ?? "")])}>Add task</button><button className="button button-primary" disabled={busy || tasks.length === 0}>{busy ? "Saving…" : "Save and apply report"}</button></div><p className="muted">Saving replaces the report tasks, reverses the previous inventory movements, then applies the edited report using {selected.displayName} as the recorded actor.</p></form> : <article className="content-card empty-state"><strong>Select a report to edit</strong><p>Submitted and draft reports for the selected date appear on the left.</p></article>}
+    </section>
+  </div>;
+}
+
 function ActivityList({ items }: { items: HistoryItem[] }) {
   if (!items.length) {
     return (
@@ -2317,6 +2396,11 @@ function ClientsPage({
   const [addOpen, setAddOpen] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [sessionThreshold, setSessionThreshold] = useState(4);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editThreshold, setEditThreshold] = useState(4);
+  const [editPayment, setEditPayment] = useState("0");
+  const [editCurrency, setEditCurrency] = useState("USD");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -2358,6 +2442,14 @@ function ClientsPage({
     setKpiMessage("");
     void loadKpis();
   }, [loadKpis]);
+
+  useEffect(() => {
+    if (!client) return;
+    setEditName(client.name);
+    setEditThreshold(client.sessionThreshold);
+    setEditPayment((client.remainingPaymentCents / 100).toFixed(2));
+    setEditCurrency(client.remainingPaymentCurrency || "USD");
+  }, [client]);
 
   async function addKpi(event: FormEvent) {
     event.preventDefault();
@@ -2477,6 +2569,38 @@ function ClientsPage({
       );
     } catch (removeError) {
       setError((removeError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveClient(event: FormEvent) {
+    event.preventDefault();
+    if (!client) return;
+    const amount = Number(editPayment);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError("Enter a valid remaining payment amount.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/clients", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: client.id,
+          name: editName,
+          sessionThreshold: editThreshold,
+          remainingPaymentCents: Math.round(amount * 100),
+          remainingPaymentCurrency: editCurrency,
+        }),
+      });
+      setEditOpen(false);
+      await onChanged();
+      setMessage(`${editName.trim().toUpperCase()} was updated.`);
+    } catch (saveError) {
+      setError((saveError as Error).message);
     } finally {
       setBusy(false);
     }
@@ -2686,6 +2810,18 @@ function ClientsPage({
               <button
                 type="button"
                 className="button client-remove-button"
+                onClick={() => {
+                  setEditOpen((value) => !value);
+                  setError("");
+                }}
+                disabled={busy}
+              >
+                <Icon name="edit" size={16} />
+                {editOpen ? "Close edit" : "Edit client"}
+              </button>
+              <button
+                type="button"
+                className="button client-remove-button"
                 onClick={() => void removeClient()}
                 disabled={busy}
               >
@@ -2693,6 +2829,19 @@ function ClientsPage({
               </button>
             </div>
           </section>
+          {editOpen && (
+            <form className="content-card add-client-card" onSubmit={saveClient}>
+              <div>
+                <span className="eyebrow">Client settings</span>
+                <h2>Edit client</h2>
+                <p>Update the client name, inventory warning threshold, or the payment balance shown in the client portal.</p>
+              </div>
+              <label>Client name<input value={editName} onChange={(event) => setEditName(event.target.value)} required /></label>
+              <label>Session warning at<div className="input-suffix"><input type="number" min={0} max={100} value={editThreshold} onChange={(event) => setEditThreshold(Number(event.target.value))} required /><span>finished + shot reels left</span></div></label>
+              <label>Remaining payment<div className="input-suffix"><input type="number" min={0} step="0.01" value={editPayment} onChange={(event) => setEditPayment(event.target.value)} required /><select value={editCurrency} onChange={(event) => setEditCurrency(event.target.value)}><option value="USD">USD</option><option value="EUR">EUR</option><option value="SYP">SYP</option></select></div></label>
+              <button className="button button-primary" disabled={busy || editName.trim().length < 2}>{busy ? "Saving…" : "Save client changes"}</button>
+            </form>
+          )}
           <form className="content-card client-logo-card" onSubmit={uploadClientLogo}>
             <div className="client-logo-copy">
               <span className="eyebrow">Client branding</span>
@@ -5274,6 +5423,7 @@ function AppShell({
   const nav = isAdmin
     ? [
         ["home", "Overview", "home"],
+        ["reports", "Reports", "activity"],
         ["inventory", "Inventory", "box"],
         ["clients", "Clients", "clients"],
         ["sessions", "Sessions", "calendar"],
@@ -5630,6 +5780,9 @@ export default function OzmoApp() {
     if (user.role === "admin") {
       if (section === "home" && dashboard) {
         return <AdminDashboard data={dashboard} onNavigate={setSection} />;
+      }
+      if (section === "reports") {
+        return <AdminReportsPage clients={clients} />;
       }
       if (section === "inventory") {
         return <InventoryPage clients={clients} onChanged={loadData} />;

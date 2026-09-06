@@ -27,6 +27,12 @@ type KpiRow = {
   completed_at: string | null;
 };
 
+type ClientDetailsRow = {
+  remaining_payment_cents: number;
+  remaining_payment_currency: string;
+  logo_updated_at: string | null;
+};
+
 export async function GET(request: Request) {
   try {
     const user = await requirePortalUser(request);
@@ -40,7 +46,7 @@ export async function GET(request: Request) {
     const database = getD1();
     const monthStart = `${month}-01`;
     const monthEnd = nextMonthStart(month);
-    const [inventory, monthly, activity, session, logo, goals] = await Promise.all([
+    const [inventory, monthly, activity, session, clientDetails, goals] = await Promise.all([
       database
         .prepare(
           `SELECT
@@ -101,9 +107,16 @@ export async function GET(request: Request) {
         .bind(user.clientId, new Date().toISOString())
         .first<{ id: number; scheduled_for: string; status: string }>(),
       database
-        .prepare("SELECT updated_at FROM client_logos WHERE client_id=?")
+        .prepare(
+          `SELECT c.remaining_payment_cents,c.remaining_payment_currency,
+                  l.updated_at AS logo_updated_at
+           FROM clients c
+           LEFT JOIN client_logos l ON l.client_id=c.id
+           WHERE c.id=?
+           LIMIT 1`,
+        )
         .bind(user.clientId)
-        .first<{ updated_at: string }>(),
+        .first<ClientDetailsRow>(),
       database
         .prepare(
           `SELECT id,goal,is_completed,completed_at
@@ -121,8 +134,11 @@ export async function GET(request: Request) {
           id: String(user.clientId),
           ozmoClientId: user.ozmoClientId,
           name: user.clientName,
-          logoUrl: logo
-            ? `/api/client-logo?clientId=${user.clientId}&v=${encodeURIComponent(logo.updated_at)}`
+          remainingPaymentCents: Number(clientDetails?.remaining_payment_cents ?? 0),
+          remainingPaymentCurrency:
+            clientDetails?.remaining_payment_currency || "USD",
+          logoUrl: clientDetails?.logo_updated_at
+            ? `/api/client-logo?clientId=${user.clientId}&v=${encodeURIComponent(clientDetails.logo_updated_at)}`
             : null,
         },
         month,
