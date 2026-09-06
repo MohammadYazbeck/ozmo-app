@@ -81,6 +81,7 @@ export const clients = sqliteTable(
     remainingPaymentCurrency: text("remaining_payment_currency")
       .notNull()
       .default("USD"),
+    googleDriveUrl: text("google_drive_url"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },

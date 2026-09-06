@@ -116,6 +116,7 @@ async function initializeDatabase(): Promise<void> {
       session_reel_threshold INTEGER NOT NULL DEFAULT 4,
       remaining_payment_cents INTEGER NOT NULL DEFAULT 0,
       remaining_payment_currency TEXT NOT NULL DEFAULT 'USD',
+      google_drive_url TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -378,6 +379,7 @@ async function initializeDatabase(): Promise<void> {
     "remaining_payment_currency",
     "TEXT NOT NULL DEFAULT 'USD'",
   );
+  await ensureColumn(database, "clients", "google_drive_url", "TEXT");
   await ensureColumn(database, "sessions", "reels_shot", "INTEGER");
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);

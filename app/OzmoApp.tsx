@@ -46,6 +46,7 @@ type Client = {
   sessionThreshold: number;
   remainingPaymentCents: number;
   remainingPaymentCurrency: string;
+  googleDriveUrl?: string | null;
   postThreshold?: number | null;
   draftThreshold?: number | null;
   needsSession: boolean;
@@ -2401,6 +2402,7 @@ function ClientsPage({
   const [editThreshold, setEditThreshold] = useState(4);
   const [editPayment, setEditPayment] = useState("0");
   const [editCurrency, setEditCurrency] = useState("USD");
+  const [editGoogleDriveUrl, setEditGoogleDriveUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -2449,6 +2451,7 @@ function ClientsPage({
     setEditThreshold(client.sessionThreshold);
     setEditPayment((client.remainingPaymentCents / 100).toFixed(2));
     setEditCurrency(client.remainingPaymentCurrency || "USD");
+    setEditGoogleDriveUrl(client.googleDriveUrl || "");
   }, [client]);
 
   async function addKpi(event: FormEvent) {
@@ -2594,6 +2597,7 @@ function ClientsPage({
           sessionThreshold: editThreshold,
           remainingPaymentCents: Math.round(amount * 100),
           remainingPaymentCurrency: editCurrency,
+          googleDriveUrl: editGoogleDriveUrl,
         }),
       });
       setEditOpen(false);
@@ -2839,6 +2843,7 @@ function ClientsPage({
               <label>Client name<input value={editName} onChange={(event) => setEditName(event.target.value)} required /></label>
               <label>Session warning at<div className="input-suffix"><input type="number" min={0} max={100} value={editThreshold} onChange={(event) => setEditThreshold(Number(event.target.value))} required /><span>finished + shot reels left</span></div></label>
               <label>Remaining payment<div className="input-suffix"><input type="number" min={0} step="0.01" value={editPayment} onChange={(event) => setEditPayment(event.target.value)} required /><select value={editCurrency} onChange={(event) => setEditCurrency(event.target.value)}><option value="USD">USD</option><option value="EUR">EUR</option><option value="SYP">SYP</option></select></div></label>
+              <label>Google Drive folder link<input type="url" value={editGoogleDriveUrl} onChange={(event) => setEditGoogleDriveUrl(event.target.value)} placeholder="https://drive.google.com/..." /></label>
               <button className="button button-primary" disabled={busy || editName.trim().length < 2}>{busy ? "Saving…" : "Save client changes"}</button>
             </form>
           )}

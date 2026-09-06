@@ -30,6 +30,7 @@ type KpiRow = {
 type ClientDetailsRow = {
   remaining_payment_cents: number;
   remaining_payment_currency: string;
+  google_drive_url: string | null;
   logo_updated_at: string | null;
 };
 
@@ -108,7 +109,7 @@ export async function GET(request: Request) {
         .first<{ id: number; scheduled_for: string; status: string }>(),
       database
         .prepare(
-          `SELECT c.remaining_payment_cents,c.remaining_payment_currency,
+          `SELECT c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,
                   l.updated_at AS logo_updated_at
            FROM clients c
            LEFT JOIN client_logos l ON l.client_id=c.id
@@ -137,6 +138,7 @@ export async function GET(request: Request) {
           remainingPaymentCents: Number(clientDetails?.remaining_payment_cents ?? 0),
           remainingPaymentCurrency:
             clientDetails?.remaining_payment_currency || "USD",
+          googleDriveUrl: clientDetails?.google_drive_url || null,
           logoUrl: clientDetails?.logo_updated_at
             ? `/api/client-logo?clientId=${user.clientId}&v=${encodeURIComponent(clientDetails.logo_updated_at)}`
             : null,

@@ -24,6 +24,7 @@ type PortalSummary = {
     logoUrl?: string | null;
     remainingPaymentCents: number;
     remainingPaymentCurrency: string;
+    googleDriveUrl?: string | null;
   };
   month: string;
   content: {
@@ -259,6 +260,13 @@ function Overview({ summary }: { summary: PortalSummary }) {
       <Metric label="جاهز للنشر" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts} detail={`${summary.content.inventory.readyReels} ريل · ${summary.content.inventory.readyPosts} منشور`} tone="blue" />
       <Metric label="المبلغ المتبقي" value={formatMoney(summary.client.remainingPaymentCents, summary.client.remainingPaymentCurrency)} detail={summary.client.remainingPaymentCents > 0 ? "مستحق للدفع" : "لا توجد مستحقات"} tone="dark" />
     </section>
+    {summary.client.googleDriveUrl && (
+      <a className={styles.driveLink} href={summary.client.googleDriveUrl} target="_blank" rel="noreferrer">
+        <span className={styles.driveIcon} aria-hidden="true">↗</span>
+        <span><strong>ملفاتكم على Google Drive</strong><small>فتح مجلد الملفات المشتركة</small></span>
+        <span aria-hidden="true">←</span>
+      </a>
+    )}
     <section className={styles.grid}>
       <article className={styles.card}>
         <header><h2>التصوير القادم</h2><PortalIcon name="sessions" /></header>

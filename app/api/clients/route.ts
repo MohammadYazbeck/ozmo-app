@@ -13,6 +13,7 @@ type ClientInventoryRow = {
   session_reel_threshold: number;
   remaining_payment_cents: number;
   remaining_payment_currency: string;
+  google_drive_url: string | null;
   updated_at: string;
   shot_reel_count: number;
   reel_count: number;
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
         .prepare(
           `SELECT
              c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-             c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
+             c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at,
              COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
            LEFT JOIN inventory_balances b ON b.client_id=c.id
            WHERE c.is_active=1
            GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-                    c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
+                    c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at
            ORDER BY c.id`,
         )
         .all<ClientInventoryRow>(),
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
         sessionThreshold: client.session_reel_threshold,
         remainingPaymentCents: Number(client.remaining_payment_cents ?? 0),
         remainingPaymentCurrency: client.remaining_payment_currency || "USD",
+        googleDriveUrl: client.google_drive_url,
         postThreshold: canViewAllInventory ? postThreshold : null,
         draftThreshold: canViewAllInventory ? draftThreshold : null,
         needsSession:
@@ -218,7 +220,7 @@ export async function POST(request: Request) {
       .prepare(
         `SELECT
            c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-           c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
+           c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at,
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -228,7 +230,7 @@ export async function POST(request: Request) {
          LEFT JOIN inventory_balances b ON b.client_id=c.id
          WHERE c.name=? COLLATE NOCASE AND c.is_active=1
          GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-                  c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
+                  c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at
          LIMIT 1`,
       )
       .bind(name)
@@ -248,6 +250,7 @@ export async function POST(request: Request) {
           sessionThreshold: created.session_reel_threshold,
           remainingPaymentCents: Number(created.remaining_payment_cents ?? 0),
           remainingPaymentCurrency: created.remaining_payment_currency || "USD",
+          googleDriveUrl: created.google_drive_url,
           needsSession: false,
           updatedAt: created.updated_at,
           logoUrl: clientLogoUrl(created.id, created.logo_updated_at),
@@ -271,6 +274,7 @@ export async function PATCH(request: Request) {
       sessionThreshold?: unknown;
       remainingPaymentCents?: unknown;
       remainingPaymentCurrency?: unknown;
+      googleDriveUrl?: unknown;
     } | null;
     const clientId = Number(body?.id);
     if (!Number.isSafeInteger(clientId) || clientId < 1) {
@@ -351,7 +355,8 @@ export async function PATCH(request: Request) {
       .prepare(
         `UPDATE clients
          SET name=?,session_reel_threshold=?,remaining_payment_cents=?,
-             remaining_payment_currency=?,updated_at=CURRENT_TIMESTAMP
+          remaining_payment_currency=?,updated_at=CURRENT_TIMESTAMP
+             ,google_drive_url=?
          WHERE id=? AND is_active=1`,
       )
       .bind(
@@ -359,6 +364,7 @@ export async function PATCH(request: Request) {
         sessionThreshold,
         remainingPaymentCents,
         remainingPaymentCurrency,
+        normalizeGoogleDriveUrl(body?.googleDriveUrl),
         clientId,
       )
       .run();
@@ -367,7 +373,7 @@ export async function PATCH(request: Request) {
       .prepare(
         `SELECT
            c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-           c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
+           c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at,
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -377,7 +383,7 @@ export async function PATCH(request: Request) {
          LEFT JOIN inventory_balances b ON b.client_id=c.id
          WHERE c.id=? AND c.is_active=1
          GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-                  c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
+                  c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at
          LIMIT 1`,
       )
       .bind(clientId)
@@ -395,6 +401,7 @@ export async function PATCH(request: Request) {
         sessionThreshold: updated.session_reel_threshold,
         remainingPaymentCents: Number(updated.remaining_payment_cents ?? 0),
         remainingPaymentCurrency: updated.remaining_payment_currency || "USD",
+        googleDriveUrl: updated.google_drive_url,
         needsSession: false,
         updatedAt: updated.updated_at,
         logoUrl: clientLogoUrl(updated.id, updated.logo_updated_at),
@@ -530,4 +537,22 @@ function parseOptionalNumber(value: string | undefined): number | null {
 function clientLogoUrl(clientId: number, updatedAt: string | null) {
   if (!updatedAt) return null;
   return `/api/client-logo?clientId=${clientId}&v=${encodeURIComponent(updatedAt)}`;
+}
+
+function normalizeGoogleDriveUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const candidate = value.trim();
+  if (candidate.length > 2000) {
+    throw new AuthError(400, "INVALID_GOOGLE_DRIVE_URL", "The Google Drive link is too long.");
+  }
+  try {
+    const url = new URL(candidate);
+    const hostname = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || (hostname !== "google.com" && !hostname.endsWith(".google.com"))) {
+      throw new Error("invalid host");
+    }
+    return url.toString();
+  } catch {
+    throw new AuthError(400, "INVALID_GOOGLE_DRIVE_URL", "Enter a valid HTTPS Google Drive link.");
+  }
 }

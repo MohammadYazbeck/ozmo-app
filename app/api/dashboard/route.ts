@@ -10,6 +10,7 @@ type ClientRow = {
   session_reel_threshold: number;
   remaining_payment_cents: number;
   remaining_payment_currency: string;
+  google_drive_url: string | null;
   updated_at: string;
   reel_count: number;
   shot_reel_count: number;
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
         .prepare(
           `SELECT
              c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-             c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at,
+             c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at,
              COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
@@ -109,7 +110,7 @@ export async function GET(request: Request) {
            LEFT JOIN inventory_balances b ON b.client_id=c.id
            WHERE c.is_active=1
            GROUP BY c.id,c.ozmo_client_id,c.name,c.session_reel_threshold,
-                    c.remaining_payment_cents,c.remaining_payment_currency,c.updated_at
+                    c.remaining_payment_cents,c.remaining_payment_currency,c.google_drive_url,c.updated_at
            ORDER BY c.id`,
         )
         .all<ClientRow>(),
@@ -202,6 +203,7 @@ export async function GET(request: Request) {
       sessionThreshold: client.session_reel_threshold,
       remainingPaymentCents: Number(client.remaining_payment_cents ?? 0),
       remainingPaymentCurrency: client.remaining_payment_currency || "USD",
+      googleDriveUrl: client.google_drive_url,
       postThreshold,
       draftThreshold,
       needsSession:
