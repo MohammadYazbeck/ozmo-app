@@ -28,7 +28,7 @@ type ReportRow = {
   summary: string;
   submitted_at: string | null;
   display_name: string;
-  role: "editor" | "designer" | "account_manager";
+  role: "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
 };
 
 type TaskRow = {
@@ -37,7 +37,7 @@ type TaskRow = {
   client_name: string | null;
   task_type: string;
   action: string | null;
-  content_type: "reel" | "post" | "draft" | null;
+  content_type: "reel" | "post" | "story" | "draft" | null;
   quantity: number;
   status: "completed" | "in_progress";
   description: string;
@@ -54,7 +54,7 @@ type NormalizedTask = {
   status: "completed" | "in_progress";
   quantity: number;
   notes: string;
-  contentType: "reel" | "post" | "draft" | null;
+  contentType: "reel" | "post" | "story" | "draft" | null;
   action: string | null;
   isNewContent: boolean | null;
   inventoryDelta: number;
@@ -291,9 +291,9 @@ function oldTaskEffects(task: TaskRow) {
     if (task.task_type === "reel_new") {
       inventoryDelta = task.quantity;
       shotReelDelta = -task.quantity;
-    } else if (task.task_type === "post_new") inventoryDelta = task.quantity;
+    } else if (task.task_type === "post_new" || task.task_type === "story_new") inventoryDelta = task.quantity;
     else if (task.task_type === "draft_created") inventoryDelta = task.quantity;
-    else if (task.task_type === "publish_reel" || task.task_type === "publish_post") inventoryDelta = -task.quantity;
+    else if (["publish_reel", "publish_post", "publish_story"].includes(task.task_type)) inventoryDelta = -task.quantity;
     else if (task.task_type === "session_completed") shotReelDelta = task.quantity;
   }
   return { clientId: task.client_id, inventoryDelta, inventoryContentType: task.content_type, shotReelDelta };
@@ -302,7 +302,9 @@ function oldTaskEffects(task: TaskRow) {
 async function normalizeTasks(rawTasks: RawTask[], role: ReportRow["role"], clients: Map<number, ClientRow>) {
   const allowed: Record<ReportRow["role"], string[]> = {
     editor: ["reel_new", "reel_reedit", "other"],
-    designer: ["post_new", "post_revision", "other"],
+    designer: ["post_new", "story_new", "post_revision", "other"],
+    content_creator: ["meeting", "draft_created", "session_attended"],
+    content_manager: ["publish_reel", "publish_post", "publish_story"],
     account_manager: ["publish_reel", "publish_post", "draft_created", "meeting", "session_scheduled", "session_completed", "session_cancelled", "session_missed", "competitor_analysis", "agency_report", "agency_observation", "other"],
   };
   const output: NormalizedTask[] = [];
@@ -337,12 +339,12 @@ async function normalizeTasks(rawTasks: RawTask[], role: ReportRow["role"], clie
     let sessionId: number | null = null;
     if (actionType === "reel_new") { contentType = "reel"; action = "produced"; isNewContent = true; inventoryDelta = status === "completed" ? quantity : 0; shotReelDelta = status === "completed" ? -quantity : 0; }
     else if (actionType === "reel_reedit") { contentType = "reel"; action = "re_edit"; isNewContent = false; }
-    else if (actionType === "post_new") { contentType = "post"; action = "produced"; isNewContent = true; inventoryDelta = status === "completed" ? quantity : 0; }
+    else if (actionType === "post_new" || actionType === "story_new") { contentType = actionType === "story_new" ? "story" : "post"; action = "produced"; isNewContent = true; inventoryDelta = status === "completed" ? quantity : 0; }
     else if (actionType === "post_revision") { contentType = "post"; action = "revision"; isNewContent = false; }
     else if (actionType === "publish_reel") { contentType = "reel"; action = "published"; inventoryDelta = -quantity; }
-    else if (actionType === "publish_post") { contentType = "post"; action = "published"; inventoryDelta = -quantity; }
+    else if (actionType === "publish_post" || actionType === "publish_story") { contentType = actionType === "publish_story" ? "story" : "post"; action = "published"; inventoryDelta = -quantity; }
     else if (actionType === "draft_created") { contentType = "draft"; action = "created"; inventoryDelta = quantity; isNewContent = true; }
-    else if (["session_completed", "session_cancelled", "session_missed"].includes(actionType)) {
+    else if (["session_completed", "session_cancelled", "session_missed", "session_attended"].includes(actionType)) {
       sessionId = Number(raw.sessionId);
       if (!Number.isSafeInteger(sessionId) || sessionId < 1) throw new AuthError(400, "INVALID_SESSION", "Choose the session being updated.");
       action = String(sessionId);

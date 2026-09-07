@@ -21,7 +21,14 @@ import {
   showBrowserNotification,
 } from "./browserNotifications";
 
-type Role = "admin" | "editor" | "designer" | "account_manager";
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
+
+type Role = "admin" | "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
 
 type User = {
   id: string | number;
@@ -42,6 +49,7 @@ type Client = {
   shotReelCount: number;
   reelCount: number;
   postCount: number;
+  storyCount: number;
   draftCount: number;
   sessionThreshold: number;
   remainingPaymentCents: number;
@@ -132,7 +140,7 @@ type MonthArchive = {
   inventory: Array<{
     clientId: string;
     clientName: string;
-    contentType: "draft" | "shot_reel" | "reel" | "post";
+    contentType: "draft" | "shot_reel" | "reel" | "post" | "story";
     closingQuantity: number;
     carryQuantity: number;
     resetDelta: number;
@@ -255,6 +263,8 @@ type ActionOption = {
     | "draft_add"
     | "reel_take"
     | "post_take"
+    | "story_add"
+    | "story_take"
     | "none";
   needsStatus?: boolean;
   needsSessionDate?: boolean;
@@ -298,6 +308,13 @@ const ACTIONS: Record<Exclude<Role, "admin">, ActionOption[]> = {
       needsStatus: true,
     },
     {
+      value: "story_new",
+      label: "New story",
+      ar: "ستوري جديد",
+      effect: "story_add",
+      needsStatus: true,
+    },
+    {
       value: "post_revision",
       label: "Design revision",
       ar: "تعديل تصميم",
@@ -324,6 +341,12 @@ const ACTIONS: Record<Exclude<Role, "admin">, ActionOption[]> = {
       label: "Published post",
       ar: "نشر بوست",
       effect: "post_take",
+    },
+    {
+      value: "publish_story",
+      label: "Published story",
+      ar: "نشر ستوري",
+      effect: "story_take",
     },
     {
       value: "draft_created",
@@ -394,6 +417,16 @@ const ACTIONS: Record<Exclude<Role, "admin">, ActionOption[]> = {
       effect: "none",
     },
   ],
+  content_creator: [
+    { value: "meeting", label: "Client meeting", ar: "اجتماع عميل", effect: "none" },
+    { value: "draft_created", label: "Created content draft", ar: "إنشاء مسودة محتوى", effect: "draft_add" },
+    { value: "session_attended", label: "Attending a session", ar: "حضور جلسة تصوير", effect: "none", needsSessionSelect: true },
+  ],
+  content_manager: [
+    { value: "publish_reel", label: "Published reel", ar: "نشر ريل", effect: "reel_take" },
+    { value: "publish_post", label: "Published post", ar: "نشر بوست", effect: "post_take" },
+    { value: "publish_story", label: "Published story", ar: "نشر ستوري", effect: "story_take" },
+  ],
 };
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -401,6 +434,8 @@ const ROLE_LABELS: Record<Role, string> = {
   editor: "Video editor",
   designer: "Designer",
   account_manager: "Account manager",
+  content_creator: "Content creator",
+  content_manager: "Content manager",
 };
 
 const ACTION_LABELS: Record<string, string> = Object.values(ACTIONS)
@@ -422,6 +457,10 @@ function todayInDamascus() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function formatAdminMoney(cents: number, currency: string) {
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(cents / 100))} ${currency}`;
 }
 
 function formatDate(value?: string | null, withTime = false) {
@@ -1448,6 +1487,8 @@ function StaffReport({
                   ? client?.reelCount
                   : action?.effect === "post_take"
                     ? client?.postCount
+                    : action?.effect === "story_take"
+                      ? client?.storyCount
                     : undefined;
             return (
               <article key={task.id ?? index} className="task-editor">
@@ -1729,7 +1770,11 @@ function StaffReport({
               ? "A completed New reel converts one Shot reel into one Finished reel. Re-edits and in-progress work do not change inventory."
               : user.role === "designer"
                 ? "Completed New posts add inventory. Revisions and in-progress work do not."
-                : "A completed session adds its usable output to Shot reels. Publishing consumes finished Reel or Post inventory, and drafts add draft inventory."}
+                : user.role === "content_creator"
+                  ? "Record client meetings, content drafts and session attendance in your daily report."
+                  : user.role === "content_manager"
+                    ? "Publishing a Reel, Post or Story consumes its matching inventory."
+                    : "A completed session adds its usable output to Shot reels. Publishing consumes finished Reel, Post or Story inventory, and drafts add draft inventory."}
           </p>
         </div>
       </section>
@@ -1783,6 +1828,10 @@ function InventoryEffect({
         : "Adds 0 until completed";
     tone = task.status === "completed" ? "positive" : "neutral";
   }
+  if (action.effect === "story_add") {
+    label = task.status === "completed" ? `+${task.quantity} Story${task.quantity === 1 ? "" : "s"}` : "Adds 0 until completed";
+    tone = task.status === "completed" ? "positive" : "neutral";
+  }
   if (action.effect === "draft_add") {
     label = `+${task.quantity} Draft${task.quantity === 1 ? "" : "s"}`;
     tone = "positive";
@@ -1793,6 +1842,10 @@ function InventoryEffect({
   }
   if (action.effect === "post_take") {
     label = `−${task.quantity} Post · ${available ?? 0} available`;
+    tone = (available ?? 0) < task.quantity ? "danger" : "negative";
+  }
+  if (action.effect === "story_take") {
+    label = `−${task.quantity} Story · ${available ?? 0} available`;
     tone = (available ?? 0) < task.quantity ? "danger" : "negative";
   }
   return <span className={`effect-chip effect-${tone}`}>{label}</span>;
@@ -1828,9 +1881,11 @@ function MetricCard({
 function AdminDashboard({
   data,
   onNavigate,
+  onRefresh,
 }: {
   data: DashboardData;
   onNavigate: (section: AppSection) => void;
+  onRefresh: () => Promise<void>;
 }) {
   const maxChart = Math.max(
     1,
@@ -1845,6 +1900,20 @@ function AdminDashboard({
         (client.draftThreshold != null && client.draftCount <= client.draftThreshold),
     )
     .slice(0, 7);
+
+  async function markPaid(client: Client) {
+    if (client.remainingPaymentCents <= 0) return;
+    if (!window.confirm(`Mark ${client.name}'s remaining balance as paid?`)) return;
+    try {
+      await api("/api/admin/clients/paid", {
+        method: "POST",
+        body: JSON.stringify({ clientId: client.id, expectedBalanceCents: client.remainingPaymentCents }),
+      });
+      await onRefresh();
+    } catch (error) {
+      window.alert((error as Error).message);
+    }
+  }
 
   return (
     <div className="page-stack">
@@ -2015,6 +2084,11 @@ function AdminDashboard({
                     {client.draftCount} <small>Drafts</small>
                   </span>
                   {client.needsSession && <em>Session needed</em>}
+                  {client.remainingPaymentCents > 0 && (
+                    <button className="button button-soft" type="button" onClick={() => void markPaid(client)}>
+                      Paid · {formatAdminMoney(client.remainingPaymentCents, client.remainingPaymentCurrency)}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2194,7 +2268,7 @@ function InventoryPage({
 }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   const [type, setType] = useState<
-    "draft" | "shot_reel" | "reel" | "post"
+    "draft" | "shot_reel" | "reel" | "post" | "story"
   >("shot_reel");
   const [delta, setDelta] = useState(1);
   const [reason, setReason] = useState("");
@@ -2244,6 +2318,12 @@ function InventoryPage({
             </strong>
           </div>
         )}
+        {!reelsOnly && (
+          <div>
+            <small>Stories ready</small>
+            <strong>{clients.reduce((sum, client) => sum + client.storyCount, 0)}</strong>
+          </div>
+        )}
         <div>
           <small>Shot reels to edit</small>
           <strong>
@@ -2282,6 +2362,7 @@ function InventoryPage({
                   <th>Shot reels</th>
                   <th>Finished reels</th>
                   {!reelsOnly && <th>Posts</th>}
+                  {!reelsOnly && <th>Stories</th>}
                   <th>Session status</th>
                 </tr>
               </thead>
@@ -2314,6 +2395,11 @@ function InventoryPage({
                     {!reelsOnly && (
                       <td data-label="Posts">
                         <span className="inventory-number">{client.postCount}</span>
+                      </td>
+                    )}
+                    {!reelsOnly && (
+                      <td data-label="Stories">
+                        <span className="inventory-number">{client.storyCount}</span>
                       </td>
                     )}
                     <td data-label="Session">
@@ -2349,6 +2435,7 @@ function InventoryPage({
                 <option value="shot_reel">Shot reel waiting for editing</option>
                 <option value="reel">Finished reel</option>
                 <option value="post">Post / design</option>
+                <option value="story">Story</option>
               </select>
             </label>
             <label>
@@ -2411,6 +2498,13 @@ function ClientsPage({
   const [portalPassword, setPortalPassword] = useState("");
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalMessage, setPortalMessage] = useState("");
+  const [portalAccount, setPortalAccount] = useState<{
+    email: string;
+    displayName: string;
+    active: boolean;
+    updatedAt: string;
+  } | null>(null);
+  const [portalAccountLoading, setPortalAccountLoading] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoMessage, setLogoMessage] = useState("");
   const [kpiMonth, setKpiMonth] = useState(todayInDamascus().slice(0, 7));
@@ -2452,6 +2546,24 @@ function ClientsPage({
     setEditPayment((client.remainingPaymentCents / 100).toFixed(2));
     setEditCurrency(client.remainingPaymentCurrency || "USD");
     setEditGoogleDriveUrl(client.googleDriveUrl || "");
+  }, [client]);
+
+  useEffect(() => {
+    if (!client) return;
+    setPortalAccountLoading(true);
+    void api<{ account: typeof portalAccount }>(`/api/admin/portal-users?clientId=${encodeURIComponent(client.id)}`)
+      .then((result) => {
+        setPortalAccount(result.account);
+        if (result.account) {
+          setPortalDisplayName(result.account.displayName);
+          setPortalEmail(result.account.email);
+        } else {
+          setPortalDisplayName("");
+          setPortalEmail("");
+        }
+      })
+      .catch(() => setPortalAccount(null))
+      .finally(() => setPortalAccountLoading(false));
   }, [client]);
 
   async function addKpi(event: FormEvent) {
@@ -2605,6 +2717,26 @@ function ClientsPage({
       setMessage(`${editName.trim().toUpperCase()} was updated.`);
     } catch (saveError) {
       setError((saveError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markClientPaid() {
+    if (!client || client.remainingPaymentCents <= 0) return;
+    if (!window.confirm(`Mark ${client.name}'s remaining balance as paid?`)) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/admin/clients/paid", {
+        method: "POST",
+        body: JSON.stringify({ clientId: client.id, expectedBalanceCents: client.remainingPaymentCents }),
+      });
+      await onChanged();
+      setMessage(`${client.name} balance was marked as paid.`);
+    } catch (paymentError) {
+      setError((paymentError as Error).message);
     } finally {
       setBusy(false);
     }
@@ -2823,6 +2955,11 @@ function ClientsPage({
                 <Icon name="edit" size={16} />
                 {editOpen ? "Close edit" : "Edit client"}
               </button>
+              {client.remainingPaymentCents > 0 && (
+                <button type="button" className="button button-primary" onClick={() => void markClientPaid()} disabled={busy}>
+                  {busy ? "Working…" : "Mark paid"}
+                </button>
+              )}
               <button
                 type="button"
                 className="button client-remove-button"
@@ -2881,11 +3018,20 @@ function ClientsPage({
           <form className="content-card add-client-card" onSubmit={savePortalAccess}>
             <div>
               <span className="eyebrow">Client portal</span>
-              <h2>Create or reset portal access</h2>
+              <h2>{portalAccount ? "Reset portal access" : "Create portal access"}</h2>
               <p>
-                This login can see only {client.name} content and accounting
-                data. Saving the same email resets its password and active sessions.
+                {portalAccount
+                  ? `An existing portal account is connected to ${client.name}. Saving below changes its contact details, password, and signs out active sessions.`
+                  : `Create a secure login for ${client.name}. The client will see only its own content, archive, services, and payment information.`}
               </p>
+              <div className={`portal-account-status ${portalAccount ? "exists" : "new"}`}>
+                <span className="portal-account-status-dot" />
+                {portalAccountLoading
+                  ? "Checking for an existing portal account…"
+                  : portalAccount
+                    ? `Existing account: ${portalAccount.email} · ${portalAccount.active ? "Active" : "Inactive"}`
+                    : "No portal account exists for this client yet."}
+              </div>
               {portalMessage && <div className="form-success">{portalMessage}</div>}
             </div>
             <label>
@@ -2897,11 +3043,11 @@ function ClientsPage({
               <input type="email" value={portalEmail} onChange={(event) => setPortalEmail(event.target.value)} placeholder="client@example.com" required />
             </label>
             <label>
-              Temporary password
-              <input type="password" minLength={10} value={portalPassword} onChange={(event) => setPortalPassword(event.target.value)} autoComplete="new-password" required />
+              {portalAccount ? "New temporary password" : "Temporary password"}
+              <input type="password" minLength={10} value={portalPassword} onChange={(event) => setPortalPassword(event.target.value)} autoComplete="new-password" placeholder="At least 10 characters" required />
             </label>
             <button className="button button-primary" disabled={portalBusy || portalPassword.length < 10}>
-              {portalBusy ? "Saving…" : "Save portal access"}
+              {portalBusy ? "Saving…" : portalAccount ? "Reset password & save" : "Create portal account"}
             </button>
           </form>
           <section className="content-card client-kpi-card">
@@ -2999,7 +3145,7 @@ function MonthArchivePage({
   const [carry, setCarry] = useState<
     Record<
       string,
-      { draft: number; shotReel: number; reel: number; post: number }
+      { draft: number; shotReel: number; reel: number; post: number; story: number }
     >
   >({});
   const [busy, setBusy] = useState(false);
@@ -3013,7 +3159,7 @@ function MonthArchivePage({
     setCarry((current) => {
       const next = { ...current };
       for (const client of clients) {
-        next[client.id] ??= { draft: 0, shotReel: 0, reel: 0, post: 0 };
+        next[client.id] ??= { draft: 0, shotReel: 0, reel: 0, post: 0, story: 0 };
       }
       return next;
     });
@@ -3021,7 +3167,7 @@ function MonthArchivePage({
 
   function updateCarry(
     clientId: string,
-    contentType: "draft" | "shotReel" | "reel" | "post",
+    contentType: "draft" | "shotReel" | "reel" | "post" | "story",
     value: number,
   ) {
     setCarry((current) => ({
@@ -3032,6 +3178,7 @@ function MonthArchivePage({
           shotReel: 0,
           reel: 0,
           post: 0,
+          story: 0,
         }),
         [contentType]: Math.max(0, value || 0),
       },
@@ -3063,6 +3210,7 @@ function MonthArchivePage({
               shotReel: 0,
               reel: 0,
               post: 0,
+              story: 0,
             }),
           })),
         }),
@@ -3075,7 +3223,7 @@ function MonthArchivePage({
         Object.fromEntries(
           clients.map((client) => [
             client.id,
-            { draft: 0, shotReel: 0, reel: 0, post: 0 },
+            { draft: 0, shotReel: 0, reel: 0, post: 0, story: 0 },
           ]),
         ),
       );
@@ -3128,6 +3276,7 @@ function MonthArchivePage({
                         shotReel: client.shotReelCount,
                         reel: client.reelCount,
                         post: client.postCount,
+                        story: client.storyCount,
                       },
                     ]),
                   ),
@@ -3145,6 +3294,7 @@ function MonthArchivePage({
               shotReel: 0,
               reel: 0,
               post: 0,
+              story: 0,
             };
             return (
               <article className="carry-client-card" key={client.id}>
@@ -3166,6 +3316,7 @@ function MonthArchivePage({
                     ["shotReel", "Shot reels", client.shotReelCount],
                     ["reel", "Finished reels", client.reelCount],
                     ["post", "Posts", client.postCount],
+                    ["story", "Stories", client.storyCount],
                   ] as const
                 ).map(([type, label, maximum]) => (
                   <label key={type}>
@@ -3316,6 +3467,7 @@ function clientsFromArchive(archive: MonthArchive) {
       shotReel: { closing: number; carry: number };
       reel: { closing: number; carry: number };
       post: { closing: number; carry: number };
+      story: { closing: number; carry: number };
       draft: { closing: number; carry: number };
     }
   >();
@@ -3325,6 +3477,7 @@ function clientsFromArchive(archive: MonthArchive) {
       shotReel: { closing: 0, carry: 0 },
       reel: { closing: 0, carry: 0 },
       post: { closing: 0, carry: 0 },
+      story: { closing: 0, carry: 0 },
       draft: { closing: 0, carry: 0 },
     };
     const contentKey =
@@ -3638,6 +3791,8 @@ const ROLE_ACCESS_COPY: Record<Role, string> = {
   editor: "Converts Shot reels into Finished reels and manages their reports",
   designer: "Creates posts and manages their own daily reports",
   account_manager: "Publishes content, creates drafts and manages sessions",
+  content_creator: "Handles client meetings, content drafts and session attendance",
+  content_manager: "Publishes reels, posts and stories",
 };
 
 function normalizeTeamUsername(value: string) {
@@ -5268,6 +5423,115 @@ function BrowserNotificationSetupCard() {
   );
 }
 
+function NotificationPermissionPrompt({ user }: { user: User }) {
+  const [status, setStatus] = useState<BrowserNotificationStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const dismissedKey = `ozmo-notification-prompt:${user.id}`;
+    const dismissedUntil = Number(window.localStorage.getItem(dismissedKey) || 0);
+    if (dismissedUntil > Date.now()) return undefined;
+    void getBrowserNotificationStatus().then((nextStatus) => {
+      if (!active) return;
+      setStatus(nextStatus);
+      setVisible(
+        nextStatus.issue === "permission_required" ||
+          nextStatus.issue === "subscription_required" ||
+          nextStatus.issue === "test_failed",
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [user.id]);
+
+  if (!visible || !status) return null;
+
+  const copy = getNotificationSetupCopy(status);
+  async function enable() {
+    setBusy(true);
+    const nextStatus = await enableBrowserNotifications();
+    setStatus(nextStatus);
+    setBusy(false);
+    if (nextStatus.issue === "ready") setVisible(false);
+  }
+
+  function remindLater() {
+    window.localStorage.setItem(
+      `ozmo-notification-prompt:${user.id}`,
+      String(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    );
+    setVisible(false);
+  }
+
+  return (
+    <aside className="notification-permission-prompt" role="dialog" aria-label="Browser notifications">
+      <div className="notification-permission-icon"><Icon name="bell" size={19} /></div>
+      <div className="notification-permission-copy">
+        <strong>Stay updated with OZMO</strong>
+        <p>{copy.detail || "Allow browser notifications for report reminders, sessions, and team updates."}</p>
+        {status.lastError && <small>{status.lastError}</small>}
+        <div className="notification-permission-actions">
+          <button type="button" className="button button-primary" onClick={() => void enable()} disabled={busy}>
+            {busy ? "Enabling…" : "Enable notifications"}
+          </button>
+          <button type="button" className="notification-permission-later" onClick={remindLater}>
+            Later
+          </button>
+        </div>
+      </div>
+      <button type="button" className="notification-permission-close" onClick={remindLater} aria-label="Dismiss">
+        ×
+      </button>
+    </aside>
+  );
+}
+
+function InstallAppPrompt({ user }: { user: User }) {
+  const [available, setAvailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [ios, setIos] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+    setIos(/iPhone|iPad|iPod/i.test(navigator.userAgent) && !standalone);
+    setAvailable(mobile && !standalone && Boolean(deferredInstallPrompt));
+    const onAvailable = () => setAvailable(mobile && !standalone && Boolean(deferredInstallPrompt));
+    window.addEventListener("ozmo-install-available", onAvailable);
+    return () => window.removeEventListener("ozmo-install-available", onAvailable);
+  }, [user.id]);
+
+  if (dismissed || (!available && !ios)) return null;
+
+  async function install() {
+    if (!deferredInstallPrompt) return;
+    setBusy(true);
+    await deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice.catch(() => undefined);
+    deferredInstallPrompt = null;
+    setBusy(false);
+    setAvailable(false);
+  }
+
+  return (
+    <aside className="install-app-prompt" role="dialog" aria-label="Install OZMO">
+      <div className="install-app-icon"><Icon name="spark" size={19} /></div>
+      <div className="install-app-copy">
+        <strong>Open OZMO like an app</strong>
+        <p>{ios ? "Tap Share, then Add to Home Screen to keep OZMO one tap away." : "Save OZMO to your Home Screen for faster access and a focused app view."}</p>
+        {!ios && <button type="button" className="button button-primary" onClick={() => void install()} disabled={busy}>{busy ? "Opening…" : "Add to Home Screen"}</button>}
+      </div>
+      <button type="button" className="install-app-close" onClick={() => { setAvailable(false); setDismissed(true); }} aria-label="Dismiss">×</button>
+    </aside>
+  );
+}
+
 function StaffSettingsPage({ report }: { report: DailyReport }) {
   return (
     <div className="page-stack">
@@ -5439,11 +5703,11 @@ function AppShell({
       ]
     : [
         ["home", "Today’s report", "home"],
-        ...(user.role === "account_manager" || user.role === "editor"
+        ...(user.role === "account_manager" || user.role === "editor" || user.role === "content_manager"
           ? ([["inventory", "Inventory", "box"]] as string[][])
           : []),
         ["history", "My history", "history"],
-        ...(user.role === "account_manager" || user.role === "editor"
+        ...(user.role === "account_manager" || user.role === "editor" || user.role === "content_manager"
           ? ([["sessions", "Sessions", "calendar"]] as string[][])
           : []),
         ["settings", "Notifications", "settings"],
@@ -5591,6 +5855,16 @@ export default function OzmoApp() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [dataError, setDataError] = useState("");
   const shownNotifications = useRef(new Set<string>());
+
+  useEffect(() => {
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event as BeforeInstallPromptEvent;
+      window.dispatchEvent(new Event("ozmo-install-available"));
+    };
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", captureInstallPrompt);
+  }, []);
 
   const loadSession = useCallback(async () => {
     const setup = await api<{ setupRequired: boolean }>("/api/setup/status");
@@ -5784,7 +6058,7 @@ export default function OzmoApp() {
     if (!user) return null;
     if (user.role === "admin") {
       if (section === "home" && dashboard) {
-        return <AdminDashboard data={dashboard} onNavigate={setSection} />;
+        return <AdminDashboard data={dashboard} onNavigate={setSection} onRefresh={loadData} />;
       }
       if (section === "reports") {
         return <AdminReportsPage clients={clients} />;
@@ -5843,7 +6117,7 @@ export default function OzmoApp() {
       if (section === "history") return <HistoryPage items={history} ownOnly />;
       if (
         section === "inventory" &&
-        (user.role === "account_manager" || user.role === "editor")
+        (user.role === "account_manager" || user.role === "editor" || user.role === "content_manager")
       ) {
         return (
           <InventoryPage
@@ -5927,6 +6201,8 @@ export default function OzmoApp() {
         </div>
       )}
       {page}
+      <NotificationPermissionPrompt user={user} />
+      <InstallAppPrompt user={user} />
       {tutorialOpen && (
         <Tutorial
           user={user}

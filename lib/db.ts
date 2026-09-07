@@ -99,7 +99,7 @@ async function initializeDatabase(): Promise<void> {
       username TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
       phone TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('admin','editor','designer','account_manager')),
+      role TEXT NOT NULL CHECK (role IN ('admin','editor','designer','account_manager','content_creator','content_manager')),
       password_hash TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       must_change_password INTEGER NOT NULL DEFAULT 0,
@@ -143,7 +143,7 @@ async function initializeDatabase(): Promise<void> {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
       client_id INTEGER REFERENCES clients(id) ON DELETE RESTRICT,
       task_type TEXT NOT NULL,
-      content_type TEXT CHECK (content_type IS NULL OR content_type IN ('reel','post','draft')),
+      content_type TEXT CHECK (content_type IS NULL OR content_type IN ('reel','post','story','draft')),
       action TEXT,
       quantity INTEGER NOT NULL DEFAULT 1,
       is_new_content INTEGER,
@@ -160,7 +160,7 @@ async function initializeDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS inventory_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post')),
+      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post','story')),
       delta INTEGER NOT NULL,
       event_type TEXT NOT NULL,
       task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
@@ -172,7 +172,7 @@ async function initializeDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS inventory_balances (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post')),
+      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post','story')),
       quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (client_id,content_type)
@@ -271,7 +271,7 @@ async function initializeDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS inventory_period_snapshots (
       period_id INTEGER NOT NULL REFERENCES inventory_periods(id) ON DELETE RESTRICT,
       client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post')),
+      content_type TEXT NOT NULL CHECK (content_type IN ('draft','shot_reel','reel','post','story')),
       closing_quantity INTEGER NOT NULL CHECK (closing_quantity >= 0),
       carry_quantity INTEGER NOT NULL CHECK (
         carry_quantity >= 0 AND carry_quantity <= closing_quantity
@@ -419,7 +419,7 @@ async function initializeDatabase(): Promise<void> {
         .prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)")
         .bind(key, value),
     ),
-    ...(["draft", "shot_reel", "reel", "post"] as const).map((contentType) =>
+    ...(["draft", "shot_reel", "reel", "post", "story"] as const).map((contentType) =>
       database
         .prepare(
           `INSERT OR IGNORE INTO inventory_balances
@@ -530,7 +530,7 @@ async function rebuildInventoryEventsForShotReels(database: D1Database) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
         content_type TEXT NOT NULL CHECK (
-          content_type IN ('draft','shot_reel','reel','post')
+          content_type IN ('draft','shot_reel','reel','post','story')
         ),
         delta INTEGER NOT NULL,
         event_type TEXT NOT NULL,
@@ -582,7 +582,7 @@ async function rebuildInventoryBalancesForShotReels(database: D1Database) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         content_type TEXT NOT NULL CHECK (
-          content_type IN ('draft','shot_reel','reel','post')
+          content_type IN ('draft','shot_reel','reel','post','story')
         ),
         quantity INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -618,7 +618,7 @@ async function rebuildInventorySnapshotsForShotReels(database: D1Database) {
           REFERENCES inventory_periods(id) ON DELETE RESTRICT,
         client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
         content_type TEXT NOT NULL CHECK (
-          content_type IN ('draft','shot_reel','reel','post')
+          content_type IN ('draft','shot_reel','reel','post','story')
         ),
         closing_quantity INTEGER NOT NULL,
         carry_quantity INTEGER NOT NULL,

@@ -17,7 +17,7 @@ type LoginRow = {
   username: string;
   display_name: string;
   phone: string;
-  role: "admin" | "editor" | "designer" | "account_manager";
+  role: "admin" | "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
   password_hash: string | null;
   is_active: number;
   must_change_password: number;

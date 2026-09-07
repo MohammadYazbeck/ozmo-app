@@ -799,11 +799,11 @@ async function getManagerSummary(
              AND event_type LIKE 'session_shot_reels:%' AND delta>0
            THEN delta ELSE 0 END), 0) AS shot,
          COALESCE(SUM(CASE
-           WHEN event_type IN ('reel_new','post_new','draft_created')
+           WHEN event_type IN ('reel_new','post_new','story_new','draft_created')
              AND delta>0
            THEN delta ELSE 0 END), 0) AS produced,
          COALESCE(SUM(CASE
-           WHEN event_type IN ('publish_reel','publish_post') AND delta<0
+           WHEN event_type IN ('publish_reel','publish_post','publish_story') AND delta<0
            THEN -delta ELSE 0 END), 0) AS published
        FROM inventory_events
        WHERE occurred_on BETWEEN ? AND ?`,

@@ -22,7 +22,7 @@ type SnapshotRow = {
   period_id: number;
   client_id: number;
   client_name: string;
-  content_type: "reel" | "shot_reel" | "post" | "draft";
+  content_type: "reel" | "shot_reel" | "post" | "story" | "draft";
   closing_quantity: number;
   carry_quantity: number;
   reset_delta: number;
@@ -31,7 +31,7 @@ type SnapshotRow = {
 type BalanceRow = {
   client_id: number;
   client_name: string;
-  content_type: "reel" | "shot_reel" | "post" | "draft";
+  content_type: "reel" | "shot_reel" | "post" | "story" | "draft";
   quantity: number;
 };
 
@@ -118,6 +118,7 @@ export async function POST(request: Request) {
         reel?: unknown;
         shotReel?: unknown;
         post?: unknown;
+        story?: unknown;
         draft?: unknown;
       }>;
     } | null;
@@ -179,7 +180,7 @@ export async function POST(request: Request) {
       .all<BalanceRow>();
     const supplied = new Map<
       number,
-      { reel: number; shot_reel: number; post: number; draft: number }
+      { reel: number; shot_reel: number; post: number; story: number; draft: number }
     >();
     for (const entry of body.carry) {
       const clientId = Number(entry.clientId);
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
         reel: Number(entry.reel),
         shot_reel: Number(entry.shotReel),
         post: Number(entry.post),
+        story: Number(entry.story ?? 0),
         draft: Number(entry.draft),
       };
       if (

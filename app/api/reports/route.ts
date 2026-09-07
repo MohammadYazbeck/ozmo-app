@@ -31,7 +31,7 @@ type NormalizedTask = {
   status: "completed" | "in_progress";
   quantity: number;
   notes: string;
-  contentType: "reel" | "post" | "draft" | null;
+  contentType: "reel" | "post" | "story" | "draft" | null;
   action: string | null;
   isNewContent: boolean | null;
   inventoryDelta: number;
@@ -720,16 +720,19 @@ function reportWindowMessage(
 
 async function normalizeTasks(
   rawTasks: RawTask[],
-  role: "editor" | "designer" | "account_manager",
+  role: "editor" | "designer" | "account_manager" | "content_creator" | "content_manager",
   clients: Map<number, ClientRow>,
   database: D1Database,
 ): Promise<NormalizedTask[]> {
   const allowed: Record<string, string[]> = {
     editor: ["reel_new", "reel_reedit", "other"],
-    designer: ["post_new", "post_revision", "other"],
+    designer: ["post_new", "story_new", "post_revision", "other"],
+    content_creator: ["meeting", "draft_created", "session_attended"],
+    content_manager: ["publish_reel", "publish_post", "publish_story"],
     account_manager: [
       "publish_reel",
       "publish_post",
+      "publish_story",
       "draft_created",
       "meeting",
       "session_scheduled",
@@ -832,8 +835,8 @@ async function normalizeTasks(
       contentType = "reel";
       action = "re_edit";
       isNewContent = false;
-    } else if (actionType === "post_new") {
-      contentType = "post";
+    } else if (actionType === "post_new" || actionType === "story_new") {
+      contentType = actionType === "story_new" ? "story" : "post";
       action = "produced";
       isNewContent = true;
       inventoryDelta = status === "completed" ? quantity : 0;
@@ -845,8 +848,8 @@ async function normalizeTasks(
       contentType = "reel";
       action = "published";
       inventoryDelta = -quantity;
-    } else if (actionType === "publish_post") {
-      contentType = "post";
+    } else if (actionType === "publish_post" || actionType === "publish_story") {
+      contentType = actionType === "publish_story" ? "story" : "post";
       action = "published";
       inventoryDelta = -quantity;
     } else if (actionType === "draft_created") {
@@ -869,7 +872,7 @@ async function normalizeTasks(
       }
       action = sessionAt;
     } else if (
-      ["session_completed", "session_cancelled", "session_missed"].includes(actionType)
+      ["session_completed", "session_cancelled", "session_missed", "session_attended"].includes(actionType)
     ) {
       sessionId = Number(raw.sessionId);
       if (!Number.isSafeInteger(sessionId) || sessionId < 1) {

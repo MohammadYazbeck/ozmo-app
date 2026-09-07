@@ -10,11 +10,11 @@ type TaskHistoryRow = {
   id: number;
   date: string;
   actor_name: string;
-  actor_role: "admin" | "editor" | "designer" | "account_manager";
+  actor_role: "admin" | "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
   client_name: string | null;
   task_type: string;
   description: string;
-  content_type: "reel" | "post" | "draft" | null;
+  content_type: "reel" | "post" | "story" | "draft" | null;
   quantity: number;
   status: string;
 };
@@ -25,7 +25,7 @@ type InventoryHistoryRow = {
   actor_name: string;
   actor_role: "admin";
   client_name: string;
-  content_type: "reel" | "shot_reel" | "post" | "draft";
+  content_type: "reel" | "shot_reel" | "post" | "story" | "draft";
   delta: number;
   note: string;
 };

@@ -35,6 +35,7 @@ type PortalSummary = {
       shotReels: number;
       readyReels: number;
       readyPosts: number;
+      readyStories: number;
     };
     updatedAt: string;
   };
@@ -86,6 +87,7 @@ export default function ClientPortal() {
   const [view, setView] = useState<View>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const workspaceRef = useRef<HTMLElement>(null);
   const previousView = useRef(view);
   const month = currentMonth();
@@ -126,6 +128,16 @@ export default function ClientPortal() {
   }, [loadPortal]);
 
   useEffect(() => {
+    const saved = window.localStorage.getItem("ozmo-portal-theme");
+    if (saved === "dark" || saved === "light") setTheme(saved);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("dark");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("ozmo-portal-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
     if (previousView.current === view) return;
     previousView.current = view;
     workspaceRef.current?.querySelector("h1")?.focus({ preventScroll: true });
@@ -143,13 +155,12 @@ export default function ClientPortal() {
   }
 
   return (
-    <div className={styles.portal} dir="rtl" lang="ar">
+    <div className={`${styles.portal} ${theme === "dark" ? styles.dark : ""}`} dir="rtl" lang="ar">
       <header className={styles.shellHeader}>
-        <div className={styles.headerIdentity} title={user.clientName}>
-          <ClientMark name={user.clientName} logoUrl={summary?.client.logoUrl} compact />
-          <strong>{user.clientName}</strong>
-        </div>
         <OzmoBrand />
+        <button className={styles.themeToggle} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} type="button" aria-label="Toggle light and dark mode">
+          {theme === "dark" ? "☼" : "☾"}
+        </button>
         <button className={styles.logout} onClick={() => void logout()} type="button" aria-label="تسجيل الخروج">
           <PortalIcon name="logout" /><span>خروج</span>
         </button>
@@ -253,11 +264,16 @@ function PortalLogin({ onLogin }: { onLogin: () => Promise<void> }) {
 function Overview({ summary }: { summary: PortalSummary }) {
   return <div className={styles.page}>
     <PageHeading title="نظرة عامة" month={summary.month} />
+    <section className={styles.clientHero}>
+      {summary.client.logoUrl && <ClientMark name={summary.client.name} logoUrl={summary.client.logoUrl} />}
+      <div><h2>{summary.client.name}</h2></div>
+      <span className={styles.heroSpark}>✦</span>
+    </section>
     <section className={`${styles.metrics} ${styles.overviewMetrics}`}>
       <Metric label="تم إنتاجه" value={summary.content.produced} detail="هذا الشهر" tone="orange" />
       <Metric label="تم نشره" value={summary.content.published} detail="هذا الشهر" tone="green" />
       <Metric label="بانتظار المونتاج" value={summary.content.inventory.shotReels} detail="مواد مصورة" tone="blue" />
-      <Metric label="جاهز للنشر" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts} detail={`${summary.content.inventory.readyReels} ريل · ${summary.content.inventory.readyPosts} منشور`} tone="blue" />
+      <Metric label="جاهز للنشر" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts + summary.content.inventory.readyStories} detail={`${summary.content.inventory.readyReels} ريل · ${summary.content.inventory.readyPosts} منشور · ${summary.content.inventory.readyStories} ستوري`} tone="blue" />
       <Metric label="المبلغ المتبقي" value={formatMoney(summary.client.remainingPaymentCents, summary.client.remainingPaymentCurrency)} detail={summary.client.remainingPaymentCents > 0 ? "مستحق للدفع" : "لا توجد مستحقات"} tone="dark" />
     </section>
     {summary.client.googleDriveUrl && (
@@ -302,7 +318,7 @@ function Content({ summary }: { summary: PortalSummary }) {
     <section className={styles.metrics}>
       <Metric label="تم إنتاجه" value={summary.content.produced} detail="هذا الشهر" tone="orange" />
       <Metric label="تم نشره" value={summary.content.published} detail="هذا الشهر" tone="green" />
-      <Metric label="جاهز" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts} detail="للنشر" tone="blue" />
+      <Metric label="جاهز" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts + summary.content.inventory.readyStories} detail="للنشر" tone="blue" />
       <Metric label="قيد التجهيز" value={summary.content.inventory.shotReels + summary.content.inventory.drafts} detail="مسودات ومواد مصورة" tone="dark" />
     </section>
     <article className={styles.card}>

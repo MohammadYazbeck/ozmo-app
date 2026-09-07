@@ -3072,6 +3072,88 @@ textarea:focus {
   animation: panel-in 180ms ease-out;
 }
 
+.notification-permission-prompt {
+  position: fixed;
+  z-index: 72;
+  right: 20px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 24px;
+  gap: 12px;
+  width: min(430px, calc(100vw - 32px));
+  padding: 16px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  animation: permission-in 220ms ease-out;
+}
+
+@keyframes permission-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.notification-permission-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--orange);
+  background: var(--orange-soft);
+  border-radius: 13px;
+}
+
+.notification-permission-copy strong { display: block; font-size: 15px; }
+.notification-permission-copy p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.notification-permission-copy small { display: block; margin-top: 6px; color: #a33d2e; font-size: 11px; }
+.notification-permission-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.notification-permission-actions .button { min-height: 34px; padding: 7px 12px; font-size: 12px; }
+.notification-permission-later, .notification-permission-close { color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.notification-permission-later { padding: 7px 3px; font-size: 12px; }
+.notification-permission-close { align-self: start; padding: 0; font-size: 22px; line-height: 1; }
+
+@media (max-width: 640px) {
+  .notification-permission-prompt {
+    right: 12px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    width: calc(100vw - 24px);
+    padding: 14px;
+  }
+}
+
+.install-app-prompt {
+  position: fixed;
+  z-index: 71;
+  left: 20px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 22px;
+  gap: 12px;
+  width: min(390px, calc(100vw - 32px));
+  padding: 15px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  animation: permission-in 220ms ease-out;
+}
+.install-app-icon { display: grid; place-items: center; width: 42px; height: 42px; color: var(--orange); background: var(--orange-soft); border-radius: 13px; }
+.install-app-copy strong { display: block; font-size: 15px; }
+.install-app-copy p { margin: 4px 0 11px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.install-app-copy .button { min-height: 34px; padding: 7px 12px; font-size: 12px; }
+.install-app-close { align-self: start; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; font-size: 22px; line-height: 1; }
+.portal-account-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; color: var(--muted); background: #f7f8f5; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; }
+.portal-account-status.exists { color: #245c47; background: #eef8f1; border-color: #c6e4cf; }
+.portal-account-status.new { color: #6e6255; }
+.portal-account-status-dot { width: 8px; height: 8px; flex: 0 0 auto; background: #b9bdb6; border-radius: 50%; }
+.portal-account-status.exists .portal-account-status-dot { background: #2f9b63; }
+@media (max-width: 640px) {
+  .install-app-prompt { left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
+}
+
 @keyframes panel-in {
   from { opacity: 0; transform: translateX(14px); }
   to { opacity: 1; transform: translateX(0); }

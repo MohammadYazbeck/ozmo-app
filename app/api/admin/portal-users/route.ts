@@ -7,6 +7,38 @@ import {
 } from "@/lib/auth";
 import { ensureDatabase, getD1 } from "@/lib/db";
 
+export async function GET(request: Request) {
+  try {
+    await requireAdmin(request);
+    await ensureDatabase();
+    const clientId = Number(new URL(request.url).searchParams.get("clientId"));
+    if (!Number.isSafeInteger(clientId) || clientId < 1) {
+      throw new AuthError(400, "INVALID_PORTAL_CLIENT", "Choose a client.");
+    }
+    const account = await getD1()
+      .prepare(
+        `SELECT email,display_name,is_active,created_at,updated_at
+         FROM portal_users WHERE client_id=? LIMIT 1`,
+      )
+      .bind(clientId)
+      .first<{ email: string; display_name: string; is_active: number; created_at: string; updated_at: string }>();
+    return Response.json({
+      exists: Boolean(account),
+      account: account
+        ? {
+            email: account.email,
+            displayName: account.display_name,
+            active: Boolean(account.is_active),
+            createdAt: account.created_at,
+            updatedAt: account.updated_at,
+          }
+        : null,
+    });
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     await requireAdmin(request);

@@ -15,15 +15,18 @@ export const USER_ROLES = [
   "editor",
   "designer",
   "account_manager",
+  "content_creator",
+  "content_manager",
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const TASK_CONTENT_TYPES = ["reel", "post", "draft"] as const;
+export const TASK_CONTENT_TYPES = ["reel", "post", "story", "draft"] as const;
 export const CONTENT_TYPES = [
   "draft",
   "shot_reel",
   "reel",
   "post",
+  "story",
 ] as const;
 export type ContentType = (typeof CONTENT_TYPES)[number];
 

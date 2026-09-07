@@ -15,13 +15,14 @@ type ClientRow = {
   reel_count: number;
   shot_reel_count: number;
   post_count: number;
+  story_count: number;
   draft_count: number;
 };
 
 type StaffStatusRow = {
   user_id: number;
   display_name: string;
-  role: "editor" | "designer" | "account_manager";
+  role: "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
   report_status: "submitted" | "draft" | null;
   submitted_at: string | null;
 };
@@ -30,11 +31,11 @@ type ActivityRow = {
   id: number;
   created_at: string;
   display_name: string;
-  role: "editor" | "designer" | "account_manager";
+  role: "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
   client_name: string | null;
   task_type: string;
   description: string;
-  content_type: "reel" | "post" | "draft" | null;
+  content_type: "reel" | "post" | "story" | "draft" | null;
   quantity: number;
   status: string;
 };
@@ -105,6 +106,7 @@ export async function GET(request: Request) {
              COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+             COALESCE(MAX(CASE WHEN b.content_type='story' THEN b.quantity END),0) AS story_count,
              COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count
            FROM clients c
            LEFT JOIN inventory_balances b ON b.client_id=c.id
@@ -124,10 +126,10 @@ export async function GET(request: Request) {
         .prepare(
           `SELECT
              COALESCE(SUM(CASE
-               WHEN event_type IN ('reel_new','post_new','draft_created')
+               WHEN event_type IN ('reel_new','post_new','story_new','draft_created')
                THEN delta ELSE 0 END),0) AS produced,
              COALESCE(SUM(CASE
-               WHEN event_type IN ('publish_reel','publish_post')
+               WHEN event_type IN ('publish_reel','publish_post','publish_story')
                THEN -delta ELSE 0 END),0) AS published
            FROM inventory_events
            WHERE occurred_on>=?`,
@@ -139,10 +141,10 @@ export async function GET(request: Request) {
           `SELECT
              occurred_on,
              COALESCE(SUM(CASE
-               WHEN event_type IN ('reel_new','post_new','draft_created')
+               WHEN event_type IN ('reel_new','post_new','story_new','draft_created')
                THEN delta ELSE 0 END),0) AS produced,
              COALESCE(SUM(CASE
-               WHEN event_type IN ('publish_reel','publish_post')
+               WHEN event_type IN ('publish_reel','publish_post','publish_story')
                THEN -delta ELSE 0 END),0) AS published
            FROM inventory_events
            WHERE occurred_on>=? AND occurred_on<=?
@@ -199,6 +201,7 @@ export async function GET(request: Request) {
       reelCount: Number(client.reel_count),
       shotReelCount: Number(client.shot_reel_count),
       postCount: Number(client.post_count),
+      storyCount: Number(client.story_count),
       draftCount: Number(client.draft_count),
       sessionThreshold: client.session_reel_threshold,
       remainingPaymentCents: Number(client.remaining_payment_cents ?? 0),

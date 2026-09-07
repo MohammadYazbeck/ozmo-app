@@ -18,6 +18,7 @@ type ClientInventoryRow = {
   shot_reel_count: number;
   reel_count: number;
   post_count: number;
+  story_count: number;
   draft_count: number;
   logo_updated_at: string | null;
 };
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireUser(request);
     const canViewAllInventory =
-      user.role === "admin" || user.role === "account_manager";
+      ["admin", "account_manager", "content_manager"].includes(user.role);
     const canViewReelInventory =
       canViewAllInventory || user.role === "editor";
     await ensureDatabase();
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
              COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+             COALESCE(MAX(CASE WHEN b.content_type='story' THEN b.quantity END),0) AS story_count,
              COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count,
              (SELECT updated_at FROM client_logos l WHERE l.client_id=c.id) AS logo_updated_at
            FROM clients c
@@ -79,6 +81,7 @@ export async function GET(request: Request) {
           : 0,
         reelCount: canViewReelInventory ? Number(client.reel_count) : 0,
         postCount: canViewAllInventory ? Number(client.post_count) : 0,
+        storyCount: canViewAllInventory ? Number(client.story_count) : 0,
         draftCount: canViewAllInventory ? Number(client.draft_count) : 0,
         sessionThreshold: client.session_reel_threshold,
         remainingPaymentCents: Number(client.remaining_payment_cents ?? 0),
@@ -175,7 +178,7 @@ export async function POST(request: Request) {
                WHERE id=? AND is_active=0`,
             )
             .bind(ozmoClientId, sessionThreshold, existing.id),
-          ...(["draft", "shot_reel", "reel", "post"] as const).map((contentType) =>
+          ...(["draft", "shot_reel", "reel", "post", "story"] as const).map((contentType) =>
             database
               .prepare(
                 `INSERT OR IGNORE INTO inventory_balances
@@ -193,7 +196,7 @@ export async function POST(request: Request) {
                VALUES (?,?,?)`,
             )
             .bind(ozmoClientId, name, sessionThreshold),
-          ...(["draft", "shot_reel", "reel", "post"] as const).map((contentType) =>
+          ...(["draft", "shot_reel", "reel", "post", "story"] as const).map((contentType) =>
             database
               .prepare(
                 `INSERT INTO inventory_balances
@@ -224,6 +227,7 @@ export async function POST(request: Request) {
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+           COALESCE(MAX(CASE WHEN b.content_type='story' THEN b.quantity END),0) AS story_count,
            COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count,
            (SELECT updated_at FROM client_logos l WHERE l.client_id=c.id) AS logo_updated_at
          FROM clients c
@@ -246,6 +250,7 @@ export async function POST(request: Request) {
           shotReelCount: Number(created.shot_reel_count),
           reelCount: Number(created.reel_count),
           postCount: Number(created.post_count),
+          storyCount: Number(created.story_count),
           draftCount: Number(created.draft_count),
           sessionThreshold: created.session_reel_threshold,
           remainingPaymentCents: Number(created.remaining_payment_cents ?? 0),
@@ -377,6 +382,7 @@ export async function PATCH(request: Request) {
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+           COALESCE(MAX(CASE WHEN b.content_type='story' THEN b.quantity END),0) AS story_count,
            COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count,
            (SELECT updated_at FROM client_logos l WHERE l.client_id=c.id) AS logo_updated_at
          FROM clients c
@@ -397,6 +403,7 @@ export async function PATCH(request: Request) {
         shotReelCount: Number(updated.shot_reel_count),
         reelCount: Number(updated.reel_count),
         postCount: Number(updated.post_count),
+        storyCount: Number(updated.story_count),
         draftCount: Number(updated.draft_count),
         sessionThreshold: updated.session_reel_threshold,
         remainingPaymentCents: Number(updated.remaining_payment_cents ?? 0),
@@ -436,6 +443,7 @@ export async function DELETE(request: Request) {
            COALESCE(MAX(CASE WHEN b.content_type='shot_reel' THEN b.quantity END),0) AS shot_reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='reel' THEN b.quantity END),0) AS reel_count,
            COALESCE(MAX(CASE WHEN b.content_type='post' THEN b.quantity END),0) AS post_count,
+           COALESCE(MAX(CASE WHEN b.content_type='story' THEN b.quantity END),0) AS story_count,
            COALESCE(MAX(CASE WHEN b.content_type='draft' THEN b.quantity END),0) AS draft_count,
            (SELECT updated_at FROM client_logos l WHERE l.client_id=c.id) AS logo_updated_at
          FROM clients c
@@ -519,6 +527,7 @@ export async function DELETE(request: Request) {
         shotReelCount: Number(client.shot_reel_count),
         reelCount: Number(client.reel_count),
         postCount: Number(client.post_count),
+        storyCount: Number(client.story_count),
         draftCount: Number(client.draft_count),
       },
       historyPreserved: true,

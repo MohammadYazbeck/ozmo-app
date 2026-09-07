@@ -25,11 +25,11 @@ export async function POST(request: Request) {
     if (!Number.isSafeInteger(clientId) || clientId < 1) {
       throw new AuthError(400, "INVALID_CLIENT", "Choose a valid client.");
     }
-    if (!["draft", "shot_reel", "reel", "post"].includes(type)) {
+    if (!["draft", "shot_reel", "reel", "post", "story"].includes(type)) {
       throw new AuthError(
         400,
         "INVALID_CONTENT_TYPE",
-        "Choose Draft, Shot reel, Reel or Post.",
+        "Choose Draft, Shot reel, Reel, Post or Story.",
       );
     }
     if (!Number.isSafeInteger(delta) || delta === 0 || Math.abs(delta) > 10_000) {

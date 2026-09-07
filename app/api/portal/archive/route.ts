@@ -16,7 +16,7 @@ type PeriodRow = {
 
 type SnapshotRow = {
   period_id: number;
-  content_type: "draft" | "shot_reel" | "reel" | "post";
+  content_type: "draft" | "shot_reel" | "reel" | "post" | "story";
   closing_quantity: number;
   carry_quantity: number;
 };
@@ -33,14 +33,14 @@ export async function GET(request: Request) {
              p.id,p.label,p.start_date,p.end_date,p.closed_at,p.notes,
              (
                SELECT COALESCE(SUM(CASE
-                 WHEN e.event_type IN ('reel_new','post_new','draft_created')
+                 WHEN e.event_type IN ('reel_new','post_new','story_new','draft_created')
                  THEN e.delta ELSE 0 END),0)
                FROM inventory_events e
                WHERE e.client_id=? AND e.occurred_on BETWEEN p.start_date AND p.end_date
              ) AS produced,
              (
                SELECT COALESCE(SUM(CASE
-                 WHEN e.event_type IN ('publish_reel','publish_post')
+                 WHEN e.event_type IN ('publish_reel','publish_post','publish_story')
                  THEN -e.delta ELSE 0 END),0)
                FROM inventory_events e
                WHERE e.client_id=? AND e.occurred_on BETWEEN p.start_date AND p.end_date
@@ -99,12 +99,14 @@ export async function GET(request: Request) {
               shotReels: Number(byType.get("shot_reel")?.closing_quantity ?? 0),
               readyReels: Number(byType.get("reel")?.closing_quantity ?? 0),
               readyPosts: Number(byType.get("post")?.closing_quantity ?? 0),
+              readyStories: Number(byType.get("story")?.closing_quantity ?? 0),
             },
             carry: {
               drafts: Number(byType.get("draft")?.carry_quantity ?? 0),
               shotReels: Number(byType.get("shot_reel")?.carry_quantity ?? 0),
               readyReels: Number(byType.get("reel")?.carry_quantity ?? 0),
               readyPosts: Number(byType.get("post")?.carry_quantity ?? 0),
+              readyStories: Number(byType.get("story")?.carry_quantity ?? 0),
             },
           };
         }),

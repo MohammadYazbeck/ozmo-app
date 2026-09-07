@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { migrateStoryRoles } from "./story-role-migration";
 
 type BoundValue = null | number | string | Uint8Array;
 
@@ -29,6 +30,7 @@ class SQLiteD1Database implements D1Database {
     this.database.exec("PRAGMA foreign_keys = ON");
     this.database.exec("PRAGMA journal_mode = WAL");
     this.database.exec("PRAGMA busy_timeout = 5000");
+    migrateStoryRoles(this.database);
   }
 
   prepare(query: string): D1PreparedStatement {

@@ -7,6 +7,7 @@ type InventoryRow = {
   shot_reel_count: number;
   reel_count: number;
   post_count: number;
+  story_count: number;
   draft_count: number;
   updated_at: string;
 };
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
              COALESCE(MAX(CASE WHEN content_type='shot_reel' THEN quantity END),0) AS shot_reel_count,
              COALESCE(MAX(CASE WHEN content_type='reel' THEN quantity END),0) AS reel_count,
              COALESCE(MAX(CASE WHEN content_type='post' THEN quantity END),0) AS post_count,
+             COALESCE(MAX(CASE WHEN content_type='story' THEN quantity END),0) AS story_count,
              COALESCE(MAX(CASE WHEN content_type='draft' THEN quantity END),0) AS draft_count,
              COALESCE(MAX(updated_at),CURRENT_TIMESTAMP) AS updated_at
            FROM inventory_balances
@@ -65,10 +67,10 @@ export async function GET(request: Request) {
         .prepare(
           `SELECT
              COALESCE(SUM(CASE
-               WHEN event_type IN ('reel_new','post_new') AND delta>0
+               WHEN event_type IN ('reel_new','post_new','story_new') AND delta>0
                THEN delta ELSE 0 END),0) AS produced,
              COALESCE(SUM(CASE
-               WHEN event_type IN ('publish_reel','publish_post') AND delta<0
+               WHEN event_type IN ('publish_reel','publish_post','publish_story') AND delta<0
                THEN -delta ELSE 0 END),0) AS published
            FROM inventory_events
            WHERE client_id=? AND occurred_on>=? AND occurred_on<?`,
@@ -152,6 +154,7 @@ export async function GET(request: Request) {
             shotReels: Number(inventory?.shot_reel_count ?? 0),
             readyReels: Number(inventory?.reel_count ?? 0),
             readyPosts: Number(inventory?.post_count ?? 0),
+            readyStories: Number(inventory?.story_count ?? 0),
           },
           updatedAt: inventory?.updated_at ?? new Date().toISOString(),
         },

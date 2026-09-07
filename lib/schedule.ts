@@ -16,7 +16,7 @@ export type CompanySchedule = {
 export type StaffSchedule = {
   userId: number;
   displayName: string;
-  role: "editor" | "designer" | "account_manager";
+  role: "editor" | "designer" | "account_manager" | "content_creator" | "content_manager";
   workStart: string | null;
   workEnd: string | null;
   workDays: number[] | null;
