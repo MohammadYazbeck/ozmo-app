@@ -416,7 +416,7 @@ async function initializeDatabase(): Promise<void> {
     ...OZMO_CLIENTS.map(([ozmoClientId, name]) =>
       database
         .prepare(
-          `INSERT INTO clients (ozmo_client_id,name)
+          `INSERT OR IGNORE INTO clients (ozmo_client_id,name)
            SELECT ?,?
            WHERE NOT EXISTS (
              SELECT 1 FROM clients WHERE name=? COLLATE NOCASE
