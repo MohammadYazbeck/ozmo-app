@@ -12,6 +12,8 @@ import {
 } from "@/lib/schedule";
 
 const KEY_MAP = {
+  whatsappNumber: "portal_whatsapp_number",
+  phoneNumber: "portal_phone_number",
   reportDeadline: "report_deadline",
   firstReminder: "first_reminder",
   secondReminder: "second_reminder",
@@ -30,6 +32,8 @@ const KEY_MAP = {
 } as const;
 
 type SettingsPayload = {
+  whatsappNumber: string;
+  phoneNumber: string;
   reportDeadline: string;
   firstReminder: string;
   secondReminder: string;
@@ -97,6 +101,8 @@ export async function POST(request: Request) {
     const settings = validateSettings(body);
     const database = getD1();
     const serialized: Record<keyof typeof KEY_MAP, string> = {
+      whatsappNumber: settings.whatsappNumber,
+      phoneNumber: settings.phoneNumber,
       reportDeadline: settings.reportDeadline,
       firstReminder: settings.firstReminder,
       secondReminder: settings.secondReminder,
@@ -209,6 +215,8 @@ function fromStoredSettings(
   values: Map<string, string>,
 ): Omit<SettingsPayload, "staffSchedules"> {
   return {
+    whatsappNumber: values.get(KEY_MAP.whatsappNumber) ?? "",
+    phoneNumber: values.get(KEY_MAP.phoneNumber) ?? "",
     reportDeadline: values.get(KEY_MAP.reportDeadline) ?? "18:00",
     firstReminder: values.get(KEY_MAP.firstReminder) ?? "17:15",
     secondReminder: values.get(KEY_MAP.secondReminder) ?? "17:25",
@@ -333,6 +341,8 @@ function validateSettings(
         });
   return {
     reportDeadline: body.reportDeadline!,
+    whatsappNumber: validateContactNumber(body.whatsappNumber),
+    phoneNumber: validateContactNumber(body.phoneNumber),
     firstReminder: body.firstReminder!,
     secondReminder: body.secondReminder!,
     escalationTime: body.escalationTime!,
@@ -349,6 +359,17 @@ function validateSettings(
     inventoryReady: body.inventoryReady === true,
     staffSchedules,
   };
+}
+
+function validateContactNumber(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value !== "string") throw new AuthError(400, "INVALID_PHONE", "Enter a phone number.");
+  const number = value.trim().replace(/[\s()-]/g, "");
+  if (!number) return "";
+  if (!/^\+[1-9]\d{6,14}$/.test(number)) {
+    throw new AuthError(400, "INVALID_PHONE", "Use an international phone number starting with + and country code, or leave it empty.");
+  }
+  return number;
 }
 
 function validateInteger(

@@ -2,6 +2,7 @@ import { authErrorResponse } from "@/lib/auth";
 import { getD1 } from "@/lib/db";
 import { isMonthKey } from "@/lib/portal-contract";
 import { requirePortalUser } from "@/lib/portal-auth";
+import { getClientPayments } from "@/lib/payments";
 
 type InventoryRow = {
   shot_reel_count: number;
@@ -131,8 +132,15 @@ export async function GET(request: Request) {
         .all<KpiRow>(),
     ]);
 
+    const contacts = await database.prepare("SELECT key,value FROM settings WHERE key IN ('portal_whatsapp_number','portal_phone_number')").all<{ key: string; value: string }>();
+    const contactValues = new Map(contacts.results.map(row => [row.key, row.value]));
     return Response.json(
       {
+        payments: await getClientPayments(user.clientId),
+        contact: {
+          whatsappNumber: contactValues.get("portal_whatsapp_number") || "",
+          phoneNumber: contactValues.get("portal_phone_number") || "",
+        },
         client: {
           id: String(user.clientId),
           ozmoClientId: user.ozmoClientId,

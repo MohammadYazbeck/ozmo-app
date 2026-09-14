@@ -20,6 +20,7 @@ import {
   reconcileBrowserPushSubscription,
   showBrowserNotification,
 } from "./browserNotifications";
+import PaymentHistory, { type Payment } from "./PaymentHistory";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -209,6 +210,8 @@ type HistoryItem = {
 };
 
 type SettingsData = {
+  whatsappNumber: string;
+  phoneNumber: string;
   reportDeadline: string;
   firstReminder: string;
   secondReminder: string;
@@ -2505,6 +2508,7 @@ function ClientsPage({
     updatedAt: string;
   } | null>(null);
   const [portalAccountLoading, setPortalAccountLoading] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoMessage, setLogoMessage] = useState("");
   const [kpiMonth, setKpiMonth] = useState(todayInDamascus().slice(0, 7));
@@ -2547,6 +2551,7 @@ function ClientsPage({
     setEditCurrency(client.remainingPaymentCurrency || "USD");
     setEditGoogleDriveUrl(client.googleDriveUrl || "");
   }, [client]);
+  useEffect(() => { if (!client) return; void api<{payments: Payment[]}>(`/api/admin/clients/paid?clientId=${encodeURIComponent(client.id)}`).then(result => setPayments(result.payments)).catch(() => setPayments([])); }, [client]);
 
   useEffect(() => {
     if (!client) return;
@@ -2646,6 +2651,7 @@ function ClientsPage({
       setAddOpen(false);
       setSelected(result.client.id);
       await onChanged();
+      const paymentResult = await api<{payments: Payment[]}>(`/api/admin/clients/paid?clientId=${encodeURIComponent(client.id)}`); setPayments(paymentResult.payments);
       setMessage(
         result.restored
           ? `${result.client.name} was restored with its existing history and inventory.`
@@ -3050,6 +3056,7 @@ function ClientsPage({
               {portalBusy ? "Saving…" : portalAccount ? "Reset password & save" : "Create portal account"}
             </button>
           </form>
+          <section className="content-card add-client-card"><div><span className="eyebrow">Payment history</span><h2>Paid amounts</h2><p>Payments recorded when the balance was marked paid.</p></div><PaymentHistory payments={payments} /></section>
           <section className="content-card client-kpi-card">
             <header className="section-header client-kpi-header">
               <div>
@@ -4918,6 +4925,7 @@ function SettingsPage({
         copy="All timing uses Asia/Damascus. Saved changes immediately control report access, reminders, working hours and individual days off."
       />
       <form onSubmit={save} className="settings-grid">
+        <section className="content-card settings-section"><header><span className="settings-icon"><Icon name="send" /></span><div><h2>Client contact buttons</h2><p>Shared WhatsApp and call buttons shown in every client portal.</p></div></header><div className="field-grid"><label>WhatsApp number<input value={form.whatsappNumber} onChange={(event) => update("whatsappNumber", event.target.value)} placeholder="+963..." /></label><label>Phone number<input value={form.phoneNumber} onChange={(event) => update("phoneNumber", event.target.value)} placeholder="+963..." /></label></div></section>
         <section className="content-card settings-section">
           <header>
             <span className="settings-icon"><Icon name="history" /></span>

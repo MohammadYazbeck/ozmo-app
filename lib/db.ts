@@ -94,6 +94,16 @@ async function initializeDatabase(): Promise<void> {
   const database = getD1();
 
   const schemaSql = [
+    `CREATE TABLE IF NOT EXISTS client_payments (
+      id TEXT PRIMARY KEY,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      currency TEXT NOT NULL,
+      recorded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      recorded_by_name TEXT NOT NULL,
+      paid_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS client_payments_client_date ON client_payments(client_id,paid_at)`,
     `CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,

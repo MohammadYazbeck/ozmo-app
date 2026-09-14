@@ -4,6 +4,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import styles from "./portal.module.css";
+import PaymentHistory, { type Payment } from "../PaymentHistory";
 
 type View = "overview" | "content" | "sessions" | "services" | "archive" | "billing";
 
@@ -17,6 +18,8 @@ type PortalUser = {
 };
 
 type PortalSummary = {
+  payments: Payment[];
+  contact: { whatsappNumber: string; phoneNumber: string };
   client: {
     id: string;
     ozmoClientId: string;
@@ -185,12 +188,15 @@ export default function ClientPortal() {
           <Billing summary={summary} />
         )}
       </main>
+      {summary && <div className={styles.contactButtons} aria-label="تواصل معنا">{summary.contact?.whatsappNumber && <a href={`https://wa.me/${summary.contact.whatsappNumber.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="واتساب"><PortalIcon name="chat" /> <span>واتساب</span></a>}{summary.contact?.phoneNumber && <a href={`tel:${summary.contact.phoneNumber}`} aria-label="اتصال"><PortalIcon name="phone" /> <span>اتصال</span></a>}</div>}
     </div>
   );
 }
 
-function PortalIcon({ name }: { name: View | "more" | "close" | "logout" }) {
+function PortalIcon({ name }: { name: View | "more" | "close" | "logout" | "chat" | "phone" }) {
   const paths = {
+    chat: "M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z",
+    phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.4 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z",
     overview: "m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z",
     content: "M4 3h16v18H4z M4 8h16 M9 3v5 M15 3v5 m-5 5 5 3-5 3z",
     sessions: "M3 7h4l2-3h6l2 3h4v13H3z M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
@@ -267,10 +273,8 @@ function Overview({ summary }: { summary: PortalSummary }) {
     <section className={styles.clientHero}>
       {summary.client.logoUrl && <ClientMark name={summary.client.name} logoUrl={summary.client.logoUrl} />}
       <div><h2>{summary.client.name}</h2></div>
-      <span className={styles.heroSpark}>✦</span>
     </section>
     <section className={`${styles.metrics} ${styles.overviewMetrics}`}>
-      <Metric label="تم إنتاجه" value={summary.content.produced} detail="هذا الشهر" tone="orange" />
       <Metric label="تم نشره" value={summary.content.published} detail="هذا الشهر" tone="green" />
       <Metric label="بانتظار المونتاج" value={summary.content.inventory.shotReels} detail="مواد مصورة" tone="blue" />
       <Metric label="جاهز للنشر" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts + summary.content.inventory.readyStories} detail={`${summary.content.inventory.readyReels} ريل · ${summary.content.inventory.readyPosts} منشور · ${summary.content.inventory.readyStories} ستوري`} tone="blue" />
@@ -316,7 +320,6 @@ function Content({ summary }: { summary: PortalSummary }) {
   return <div className={styles.page}>
     <PageHeading title="المحتوى" month={summary.month} />
     <section className={styles.metrics}>
-      <Metric label="تم إنتاجه" value={summary.content.produced} detail="هذا الشهر" tone="orange" />
       <Metric label="تم نشره" value={summary.content.published} detail="هذا الشهر" tone="green" />
       <Metric label="جاهز" value={summary.content.inventory.readyReels + summary.content.inventory.readyPosts + summary.content.inventory.readyStories} detail="للنشر" tone="blue" />
       <Metric label="قيد التجهيز" value={summary.content.inventory.shotReels + summary.content.inventory.drafts} detail="مسودات ومواد مصورة" tone="dark" />
@@ -341,7 +344,7 @@ function Sessions({ summary }: { summary: PortalSummary }) {
 function Billing({ summary }: { summary: PortalSummary }) {
   return <div className={styles.page}>
     <PageHeading title="الدفعات" />
-    <article className={`${styles.card} ${styles.invoice}`}><header><h2>المبلغ المتبقي</h2><em className={summary.client.remainingPaymentCents > 0 ? styles.unpaid : styles.paid}>{summary.client.remainingPaymentCents > 0 ? "مستحق للدفع" : "لا توجد مستحقات"}</em></header><strong dir="ltr">{formatMoney(summary.client.remainingPaymentCents, summary.client.remainingPaymentCurrency)}</strong></article>
+    <article className={`${styles.card} ${styles.invoice}`}><header><h2>المبلغ المتبقي</h2><em className={summary.client.remainingPaymentCents > 0 ? styles.unpaid : styles.paid}>{summary.client.remainingPaymentCents > 0 ? "مستحق للدفع" : "لا توجد مستحقات"}</em></header><strong dir="ltr">{formatMoney(summary.client.remainingPaymentCents, summary.client.remainingPaymentCurrency)}</strong></article><article className={styles.card} style={{marginTop:20}}><header><h2>سجل الدفعات</h2></header><PaymentHistory payments={summary.payments ?? []} arabic /></article>
   </div>;
 }
 

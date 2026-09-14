@@ -1,0 +1,3 @@
+"use client";
+export type Payment = { id: string; amountCents: number; currency: string; recordedBy: string; paidAt: string };
+export default function PaymentHistory({ payments, arabic = false }: { payments: Payment[]; arabic?: boolean }) { return <div>{payments.length === 0 ? <p>{arabic ? "لا توجد دفعات مسجلة بعد." : "No payments recorded yet."}</p> : payments.map(p => <div key={p.id}><strong dir="ltr">{(p.amountCents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })} {p.currency}</strong> · <span>{arabic ? "مدفوع" : `Paid · ${p.recordedBy}`}</span> · <time>{new Date(p.paidAt.replace(" ", "T") + "Z").toLocaleDateString(arabic ? "ar-SY" : "en-GB", { dateStyle: "medium", timeZone: "Asia/Damascus" })}</time></div>)}</div>; }
