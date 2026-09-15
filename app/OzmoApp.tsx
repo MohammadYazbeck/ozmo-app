@@ -3151,6 +3151,21 @@ function ClientsPage({
   );
 }
 
+function ClientBriefPage({ clients }: { clients: Client[] }) {
+  const [selected, setSelected] = useState(clients[0]?.id ?? "");
+  const client = clients.find((item) => item.id === selected) ?? clients[0];
+
+  return (
+    <div className="page-stack">
+      <PageHeading eyebrow="Client reference" title="Client briefs" copy="Keep the context, tone and working notes for every client close at hand." />
+      <div className="client-tabs">
+        {clients.map((item) => <button key={item.id} className={item.id === client?.id ? "active" : ""} onClick={() => setSelected(item.id)}>{item.name}</button>)}
+      </div>
+      {client ? <section className="content-card client-brief-card"><header className="section-header"><div><span className="eyebrow">{client.ozmoClientId}</span><h2>{client.name}</h2></div><span className="status-chip status-submitted">Team reference</span></header>{client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet.</p>}</section> : <div className="content-card empty-state"><strong>No active clients</strong><p>Client briefs will appear here when clients are added.</p></div>}
+    </div>
+  );
+}
+
 function MonthArchivePage({
   clients,
   archives,
@@ -5755,6 +5770,7 @@ function AppShell({
         ...(user.role === "account_manager" || user.role === "editor" || user.role === "content_manager"
           ? ([["sessions", "Sessions", "calendar"]] as string[][])
           : []),
+        ["clients", "Client briefs", "clients"],
         ["settings", "Notifications", "settings"],
         ["help", "Help & rules", "help"],
       ];
@@ -6170,6 +6186,7 @@ export default function OzmoApp() {
         );
       }
       if (section === "history") return <HistoryPage items={history} ownOnly />;
+      if (section === "clients") return <ClientBriefPage clients={clients} />;
       if (
         section === "inventory" &&
         (user.role === "account_manager" || user.role === "editor" || user.role === "content_manager")
