@@ -188,7 +188,7 @@ export default function ClientPortal() {
           <Billing summary={summary} />
         )}
       </main>
-      {summary && <div className={styles.contactButtons} aria-label="تواصل معنا">{summary.contact?.whatsappNumber && <a href={`https://wa.me/${summary.contact.whatsappNumber.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="واتساب"><PortalIcon name="chat" /> <span>واتساب</span></a>}{summary.contact?.phoneNumber && <a href={`tel:${summary.contact.phoneNumber}`} aria-label="اتصال"><PortalIcon name="phone" /> <span>اتصال</span></a>}</div>}
+      {summary && <div className={styles.contactButtons} aria-label="تواصل معنا">{summary.contact?.whatsappNumber && <a href={`https://wa.me/${summary.contact.whatsappNumber.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="واتساب"><ContactIcon name="whatsapp" /> <span>واتساب</span></a>}{summary.contact?.phoneNumber && <a href={`tel:${summary.contact.phoneNumber}`} aria-label="اتصال"><ContactIcon name="phone" /> <span>اتصال</span></a>}</div>}
     </div>
   );
 }
@@ -208,6 +208,13 @@ function PortalIcon({ name }: { name: View | "more" | "close" | "logout" | "chat
     logout: "M9 4H4v16h5 M10 12h11 m-4-4 4 4-4 4",
   };
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={name === "more" ? 3.5 : 1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
+}
+
+function ContactIcon({ name }: { name: "whatsapp" | "phone" }) {
+  if (name === "whatsapp") {
+    return <svg className="contact-icon contact-icon-whatsapp" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.5 3.5A11.8 11.8 0 0 0 12.08 0C5.55 0 .24 5.3.24 11.83c0 2.08.54 4.11 1.57 5.9L.14 24l6.42-1.64a11.8 11.8 0 0 0 5.52 1.37h.01c6.53 0 11.84-5.31 11.84-11.84 0-3.17-1.23-6.14-3.43-8.39ZM12.1 21.73h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.81.98 1.02-3.71-.23-.38a9.83 9.83 0 0 1-1.51-5.2C2.17 6.39 6.62 1.94 12.09 1.94a9.79 9.79 0 0 1 6.97 2.89 9.82 9.82 0 0 1 2.9 6.99c0 5.47-4.45 9.91-9.86 9.91Zm5.43-7.42c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.5-.9-.8-1.51-1.78-1.69-2.08-.18-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.49s1.07 2.89 1.22 3.09c.15.2 2.1 3.2 5.1 4.49.71.31 1.27.5 1.7.64.71.23 1.35.2 1.86.12.57-.09 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" /></svg>;
+  }
+  return <svg className="contact-icon contact-icon-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.4 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z" /></svg>;
 }
 
 function PortalNavigation({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) {

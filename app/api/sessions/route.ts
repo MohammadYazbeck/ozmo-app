@@ -69,6 +69,7 @@ async function getSession(id: number) {
          s.status,
          s.notes,
          s.reels_shot AS reelsShot,
+         s.photos_shot AS photosShot,
          s.reminder_sent_at AS reminderSentAt,
          s.missed_alert_sent_at AS missedAlertSentAt,
          s.created_at AS createdAt,
@@ -159,6 +160,7 @@ export async function GET(request: Request) {
            s.status,
            s.notes,
            s.reels_shot AS reelsShot,
+           s.photos_shot AS photosShot,
            s.reminder_sent_at AS reminderSentAt,
            s.missed_alert_sent_at AS missedAlertSentAt,
            s.created_at AS createdAt,
@@ -271,6 +273,7 @@ export async function PUT(request: Request) {
       status?: unknown;
       notes?: unknown;
       reelsShot?: unknown;
+      photosShot?: unknown;
     };
     const sessionId = Number(body.id);
     if (!Number.isSafeInteger(sessionId) || sessionId <= 0) {
@@ -306,6 +309,7 @@ export async function PUT(request: Request) {
     const notes =
       body.notes === undefined ? current.notes : cleanNotes(body.notes);
     let reelsShot = current.reelsShot;
+    let photosShot = current.photosShot;
     if (status === "completed") {
       if (body.reelsShot === undefined && currentStatus !== "completed") {
         return jsonError(
@@ -326,8 +330,28 @@ export async function PUT(request: Request) {
           );
         }
       }
+      if (body.photosShot === undefined && currentStatus !== "completed") {
+        return jsonError(
+          "Enter how many photos were shot in this session.",
+          400,
+        );
+      }
+      if (body.photosShot !== undefined) {
+        photosShot = Number(body.photosShot);
+        if (
+          !Number.isSafeInteger(photosShot) ||
+          photosShot < 0 ||
+          photosShot > 5000
+        ) {
+          return jsonError(
+            "Photos shot must be a whole number from 0 to 5,000.",
+            400,
+          );
+        }
+      }
     } else if (status === "scheduled") {
       reelsShot = null;
+      photosShot = null;
     }
     const rescheduled =
       scheduledFor !== current.scheduledFor ||
@@ -377,7 +401,7 @@ export async function PUT(request: Request) {
         .prepare(
           `UPDATE sessions
            SET client_id = ?, scheduled_for = ?, status = ?, notes = ?,
-               reels_shot = ?, reminder_sent_at = ?, missed_alert_sent_at = ?,
+               reels_shot = ?, photos_shot = ?, reminder_sent_at = ?, missed_alert_sent_at = ?,
                updated_at = ?
            WHERE id = ? AND updated_at = ?`,
         )
@@ -387,6 +411,7 @@ export async function PUT(request: Request) {
           status,
           notes ?? "",
           reelsShot,
+          photosShot,
           reminderSentAt,
           missedAlertSentAt,
           now,
@@ -489,8 +514,9 @@ export async function PUT(request: Request) {
           status: currentStatus,
           notes: current.notes,
           reelsShot: current.reelsShot,
+          photosShot: current.photosShot,
         },
-        current: { clientId, scheduledFor, status, notes, reelsShot },
+        current: { clientId, scheduledFor, status, notes, reelsShot, photosShot },
       }),
     });
     if (enteredAlertState) {

@@ -390,7 +390,9 @@ async function initializeDatabase(): Promise<void> {
     "TEXT NOT NULL DEFAULT 'USD'",
   );
   await ensureColumn(database, "clients", "google_drive_url", "TEXT");
+  await ensureColumn(database, "clients", "client_brief", "TEXT NOT NULL DEFAULT ''");
   await ensureColumn(database, "sessions", "reels_shot", "INTEGER");
+  await ensureColumn(database, "sessions", "photos_shot", "INTEGER");
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);
   await database

@@ -56,6 +56,7 @@ type Client = {
   remainingPaymentCents: number;
   remainingPaymentCurrency: string;
   googleDriveUrl?: string | null;
+  clientBrief?: string;
   postThreshold?: number | null;
   draftThreshold?: number | null;
   needsSession: boolean;
@@ -125,6 +126,7 @@ type SessionItem = {
   status: "scheduled" | "completed" | "cancelled" | "missed";
   notes?: string;
   reelsShot?: number | null;
+  photosShot?: number | null;
   createdByName?: string;
 };
 
@@ -2493,6 +2495,7 @@ function ClientsPage({
   const [editPayment, setEditPayment] = useState("0");
   const [editCurrency, setEditCurrency] = useState("USD");
   const [editGoogleDriveUrl, setEditGoogleDriveUrl] = useState("");
+  const [editClientBrief, setEditClientBrief] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -2550,6 +2553,7 @@ function ClientsPage({
     setEditPayment((client.remainingPaymentCents / 100).toFixed(2));
     setEditCurrency(client.remainingPaymentCurrency || "USD");
     setEditGoogleDriveUrl(client.googleDriveUrl || "");
+    setEditClientBrief(client.clientBrief || "");
   }, [client]);
   useEffect(() => { if (!client) return; void api<{payments: Payment[]}>(`/api/admin/clients/paid?clientId=${encodeURIComponent(client.id)}`).then(result => setPayments(result.payments)).catch(() => setPayments([])); }, [client]);
 
@@ -2716,6 +2720,7 @@ function ClientsPage({
           remainingPaymentCents: Math.round(amount * 100),
           remainingPaymentCurrency: editCurrency,
           googleDriveUrl: editGoogleDriveUrl,
+          clientBrief: editClientBrief,
         }),
       });
       setEditOpen(false);
@@ -2987,6 +2992,7 @@ function ClientsPage({
               <label>Session warning at<div className="input-suffix"><input type="number" min={0} max={100} value={editThreshold} onChange={(event) => setEditThreshold(Number(event.target.value))} required /><span>finished + shot reels left</span></div></label>
               <label>Remaining payment<div className="input-suffix"><input type="number" min={0} step="0.01" value={editPayment} onChange={(event) => setEditPayment(event.target.value)} required /><select value={editCurrency} onChange={(event) => setEditCurrency(event.target.value)}><option value="USD">USD</option><option value="EUR">EUR</option><option value="SYP">SYP</option></select></div></label>
               <label>Google Drive folder link<input type="url" value={editGoogleDriveUrl} onChange={(event) => setEditGoogleDriveUrl(event.target.value)} placeholder="https://drive.google.com/..." /></label>
+              <label>Client brief<textarea rows={8} maxLength={10000} value={editClientBrief} onChange={(event) => setEditClientBrief(event.target.value)} placeholder="Brand background, audience, tone, goals, do’s and don’ts…" /></label>
               <button className="button button-primary" disabled={busy || editName.trim().length < 2}>{busy ? "Saving…" : "Save client changes"}</button>
             </form>
           )}
@@ -3021,6 +3027,13 @@ function ClientsPage({
               )}
             </div>
           </form>
+          <section className="content-card client-brief-card">
+            <header className="section-header">
+              <div><span className="eyebrow">Team reference</span><h2>Client brief</h2></div>
+              <span className="status-chip status-submitted">{client.clientBrief?.trim() ? "Available" : "Not added"}</span>
+            </header>
+            {client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet. Admins can add one from Edit client.</p>}
+          </section>
           <form className="content-card add-client-card" onSubmit={savePortalAccess}>
             <div>
               <span className="eyebrow">Client portal</span>
@@ -3519,6 +3532,7 @@ function SessionsPage({
     null,
   );
   const [reelsShot, setReelsShot] = useState("");
+  const [photosShot, setPhotosShot] = useState("");
 
   async function createSession(event: FormEvent) {
     event.preventDefault();
@@ -3547,6 +3561,7 @@ function SessionsPage({
     id: string,
     status: SessionItem["status"],
     completedReelsShot?: number,
+    completedPhotosShot?: number,
   ) {
     setError("");
     try {
@@ -3556,12 +3571,13 @@ function SessionsPage({
           id,
           status,
           ...(status === "completed"
-            ? { reelsShot: completedReelsShot }
+            ? { reelsShot: completedReelsShot, photosShot: completedPhotosShot }
             : {}),
         }),
       });
       setCompletingSessionId(null);
       setReelsShot("");
+      setPhotosShot("");
       await onChanged();
     } catch (sessionError) {
       setError((sessionError as Error).message);
@@ -3585,6 +3601,7 @@ function SessionsPage({
       if (completingSessionId === id) {
         setCompletingSessionId(null);
         setReelsShot("");
+        setPhotosShot("");
       }
       await onChanged();
     } catch (sessionError) {
@@ -3629,7 +3646,10 @@ function SessionsPage({
                           ? "Reels shot not recorded"
                           : `${session.reelsShot} Shot reel${
                               session.reelsShot === 1 ? "" : "s"
-                            } added to the editing queue`}
+                              } added to the editing queue`}
+                        {session.photosShot == null
+                          ? " · Photos shot not recorded"
+                          : ` · ${session.photosShot} photo${session.photosShot === 1 ? "" : "s"} captured`}
                       </small>
                     )}
                   </div>
@@ -3648,6 +3668,7 @@ function SessionsPage({
                             if (nextStatus === "completed") {
                               setCompletingSessionId(session.id);
                               setReelsShot("");
+                              setPhotosShot("");
                             } else {
                               void updateSession(session.id, nextStatus);
                             }
@@ -3681,12 +3702,24 @@ function SessionsPage({
                             min={0}
                             max={500}
                             inputMode="numeric"
-                            value={reelsShot}
+                          value={reelsShot}
                             onChange={(event) =>
                               setReelsShot(event.target.value)
                             }
                             placeholder="0"
                             autoFocus
+                          />
+                        </label>
+                        <label>
+                          How many photos were shot?
+                          <input
+                            type="number"
+                            min={0}
+                            max={5000}
+                            inputMode="numeric"
+                            value={photosShot}
+                            onChange={(event) => setPhotosShot(event.target.value)}
+                            placeholder="0"
                           />
                         </label>
                         <div>
@@ -3706,17 +3739,21 @@ function SessionsPage({
                             disabled={
                               reelsShot === "" ||
                               !Number.isSafeInteger(Number(reelsShot)) ||
-                              Number(reelsShot) < 0
+                              Number(reelsShot) < 0 ||
+                              photosShot === "" ||
+                              !Number.isSafeInteger(Number(photosShot)) ||
+                              Number(photosShot) < 0
                             }
                             onClick={() =>
                               void updateSession(
                                 session.id,
                                 "completed",
                                 Number(reelsShot),
+                                Number(photosShot),
                               )
                             }
                           >
-                            Complete & add Shot reels
+                            Complete & save session output
                           </button>
                         </div>
                       </div>
@@ -5761,6 +5798,16 @@ function AppShell({
               {section === value && <i />}
             </button>
           ))}
+          <a
+            className="nav-external-link"
+            href="https://docs.google.com/spreadsheets/d/1Bcivdx5MF3z3nxoMyg5rhGOx1Z1oE2mnB_7UASNdB7U/edit?usp=sharing"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="activity" />
+            <span>Team sheet</span>
+            <Icon name="arrow" size={14} />
+          </a>
         </nav>
         <div className="sidebar-office">
           <span className="office-pulse" />

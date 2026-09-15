@@ -63,6 +63,7 @@ export type SessionRecord = {
   status: "scheduled" | "completed" | "cancelled" | "missed";
   notes: string | null;
   reelsShot: number | null;
+  photosShot: number | null;
   reminderSentAt: string | null;
   missedAlertSentAt: string | null;
   createdAt: string;

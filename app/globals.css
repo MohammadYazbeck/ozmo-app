@@ -3072,6 +3072,31 @@ textarea:focus {
   animation: panel-in 180ms ease-out;
 }
 
+.sidebar nav .nav-external-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 11px 13px;
+  color: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.sidebar nav .nav-external-link span {
+  flex: 1;
+}
+
+.sidebar nav .nav-external-link:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.055);
+  transform: translateX(2px);
+}
+
 .notification-permission-prompt {
   position: fixed;
   z-index: 72;

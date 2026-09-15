@@ -42,7 +42,6 @@ type TaskRow = {
   status: "completed" | "in_progress";
   description: string;
   occurred_on: string;
-  reels_shot: number | null;
 };
 
 type ClientRow = { id: number; name: string };
@@ -89,7 +88,7 @@ export async function GET(request: Request) {
           .prepare(
             `SELECT t.id,t.report_id,t.client_id,c.name AS client_name,
                     t.task_type,t.action,t.content_type,t.quantity,t.status,
-                    t.description,t.occurred_on,t.reels_shot
+                    t.description,t.occurred_on
              FROM tasks t
              LEFT JOIN clients c ON c.id=t.client_id
              WHERE t.report_id IN (${reports.results.map(() => "?").join(",")})
@@ -162,8 +161,7 @@ export async function PATCH(request: Request) {
     const oldTasks = await database
       .prepare(
         `SELECT t.id,t.client_id,c.name AS client_name,t.task_type,t.action,
-                t.content_type,t.quantity,t.status,t.description,t.occurred_on,
-                t.reels_shot
+                t.content_type,t.quantity,t.status,t.description,t.occurred_on
          FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
          WHERE t.report_id=? ORDER BY t.id`,
       )
@@ -280,7 +278,7 @@ function taskToClientTask(task: TaskRow) {
     notes: task.description,
     sessionAt: task.task_type === "session_scheduled" ? task.action ?? undefined : undefined,
     sessionId: task.task_type.startsWith("session_") && task.task_type !== "session_scheduled" ? task.action ?? undefined : undefined,
-    reelsShot: task.reels_shot,
+    reelsShot: task.task_type === "session_completed" ? task.quantity : null,
   };
 }
 
