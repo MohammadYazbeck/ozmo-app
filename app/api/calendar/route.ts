@@ -1,6 +1,7 @@
 import { AuthError, authErrorResponse, requireUser } from "@/lib/auth";
 import { ensureCalendarItems } from "@/lib/content-calendar";
 import { ensureDatabase, getD1 } from "@/lib/db";
+import { sendPushToPortalClient } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export async function PATCH(request: Request) {
         db.prepare("UPDATE client_calendar_items SET review_url=?,review_added_at=CURRENT_TIMESTAMP,status='link_added',viewed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(reviewUrl, itemId),
         db.prepare("INSERT INTO portal_notifications (client_id,calendar_item_id,title_ar,message_ar) VALUES (?,?,?,?)").bind(item.client_id, itemId, "محتوى جديد بانتظار المراجعة", `راجعوا ${item.content_type === 'reel' ? 'الريل' : 'المنشور'} الأخير في التقويم`),
       ]);
+      await sendPushToPortalClient(item.client_id, { titleEn: "New content is ready", titleAr: "محتوى جديد بانتظار المراجعة", messageEn: "Review the latest content in your calendar", messageAr: `راجعوا ${item.content_type === 'reel' ? 'الريل' : 'المنشور'} الأخير في التقويم`, url: "/portal" }).catch((error) => console.error("Portal push failed", error));
       return Response.json({ ok: true });
     }
     throw new AuthError(400, "INVALID_ACTION", "Choose a valid calendar action.");

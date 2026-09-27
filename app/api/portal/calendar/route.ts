@@ -20,8 +20,17 @@ export async function GET(request: Request) {
     const notifications = await db.prepare(
       `SELECT id,calendar_item_id,title_ar,message_ar,read_at,created_at FROM portal_notifications
        WHERE client_id=? ORDER BY created_at DESC LIMIT 20`,
-    ).bind(user.clientId).all<{ id: number; calendar_item_id: number; title_ar: string; message_ar: string; read_at: string | null; created_at: string }>();
-    return Response.json({ enabled: Boolean(client?.calendar_enabled), month, items: items.results.map((item) => ({ id: String(item.id), date: item.scheduled_date, contentType: item.content_type, status: item.status, hasReviewLink: Boolean(item.review_url), viewedAt: item.viewed_at, publishedAt: item.published_at })), notifications: notifications.results.map((item) => ({ id: String(item.id), itemId: String(item.calendar_item_id), title: item.title_ar, message: item.message_ar, read: Boolean(item.read_at), createdAt: item.created_at })) }, { headers: { "Cache-Control": "no-store" } });
+    ).bind(user.clientId).all<{ id: number; calendar_item_id: number | null; title_ar: string; message_ar: string; read_at: string | null; created_at: string }>();
+    return Response.json({ enabled: Boolean(client?.calendar_enabled), month, items: items.results.map((item) => ({ id: String(item.id), date: item.scheduled_date, contentType: item.content_type, status: item.status, hasReviewLink: Boolean(item.review_url), viewedAt: item.viewed_at, publishedAt: item.published_at })), notifications: notifications.results.map((item) => ({ id: String(item.id), itemId: item.calendar_item_id == null ? null : String(item.calendar_item_id), title: item.title_ar, message: item.message_ar, read: Boolean(item.read_at), createdAt: item.created_at })) }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return authErrorResponse(error); }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requirePortalUser(request); const body = await request.json().catch(() => null) as { notificationId?: unknown } | null; const id = Number(body?.notificationId);
+    if (!Number.isSafeInteger(id) || id < 1) throw new AuthError(400, "INVALID_NOTIFICATION", "Invalid notification.");
+    await getD1().prepare("UPDATE portal_notifications SET read_at=COALESCE(read_at,CURRENT_TIMESTAMP) WHERE id=? AND client_id=?").bind(id, user.clientId).run();
+    return Response.json({ ok: true });
   } catch (error) { return authErrorResponse(error); }
 }
 

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "calendar-experience": {
+      "targetKind": "existing-ui",
+      "projectId": "c04e9c98-0671-4d56-a60f-b85900d224ec",
+      "activeDraftId": "f7ab5306-5260-4b55-b084-a92f67f58ed1",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        ".superdesign/init/theme.md",
+        "app/OzmoApp.tsx:3150:3220",
+        "app/globals.css:1:90",
+        "app/globals.css:3095:3120",
+        "app/portal/ClientPortal.tsx",
+        "app/portal/portal.module.css"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "04544ed928b3755689dfb560d18803e06f743a055011bd1366d3c9eb53819e94",
+        ".superdesign/init/theme.md": "d66501d61fcbcc7ac6afe7cd0f1073f1a32b38846462f35688cb57cc11175207",
+        "app/OzmoApp.tsx": "2f8f64d86de5026a31291b4f100c85c635993a664b4ecdb3e0843c5e8e72bddc",
+        "app/globals.css": "7cf99ff23f78f5333188af7627a7e7228947e81eead00a4160dd89ddba3fb83e",
+        "app/portal/ClientPortal.tsx": "6f4a82acf186904cbee04bcc49fa6946ef277d005397536188bea92a1f284efa",
+        "app/portal/portal.module.css": "0957250d485c4db4b77b5c6693a9b3928901498b75294723a8c8d92999f0b976"
+      },
+      "drafts": {
+        "f7ab5306-5260-4b55-b084-a92f67f58ed1": {
+          "title": "OZMO - تقويم المحتوى",
+          "visualDirection": "OZMO technical-minimalist real month calendar",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-27T12:28:24.000Z"
+    }
+  }
+}

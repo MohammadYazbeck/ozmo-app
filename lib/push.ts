@@ -172,6 +172,46 @@ export async function removePushSubscription(
   return Number(result.meta?.changes ?? 0);
 }
 
+export async function getPortalPushConfiguration(portalUserId: number, targetEndpoint?: string) {
+  await ensurePushSupport();
+  const keys = await getOrCreateVapidKeys();
+  const endpoint = typeof targetEndpoint === "string" && targetEndpoint.length >= 12 && targetEndpoint.length <= MAX_ENDPOINT_LENGTH ? targetEndpoint : null;
+  const count = await getD1().prepare(`SELECT COUNT(*) AS count FROM portal_push_subscriptions WHERE portal_user_id=? AND is_active=1 AND (? IS NULL OR endpoint=?)`).bind(portalUserId, endpoint, endpoint).first<{ count: number }>();
+  return { configured: true, publicKey: keys.publicKey, subscribed: Number(count?.count ?? 0) > 0, subscriptionCount: Number(count?.count ?? 0) };
+}
+
+export async function savePortalPushSubscription(portalUserId: number, subscription: WebPushSubscription, details: { deviceLabel?: string; platform?: string } = {}) {
+  await ensurePushSupport();
+  validateSubscription(subscription);
+  const now = new Date().toISOString();
+  await getD1().prepare(`INSERT INTO portal_push_subscriptions (portal_user_id,endpoint,expiration_time,p256dh,auth,device_label,platform,is_active,failure_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,0,?,?) ON CONFLICT(endpoint) DO UPDATE SET portal_user_id=excluded.portal_user_id,expiration_time=excluded.expiration_time,p256dh=excluded.p256dh,auth=excluded.auth,device_label=excluded.device_label,platform=excluded.platform,is_active=1,failure_count=0,updated_at=excluded.updated_at`).bind(portalUserId, subscription.endpoint, subscription.expirationTime ?? null, subscription.keys.p256dh, subscription.keys.auth, truncate(details.deviceLabel, 120), truncate(details.platform, 80), now, now).run();
+}
+
+export async function removePortalPushSubscription(portalUserId: number, endpoint: string) {
+  const result = await getD1().prepare("DELETE FROM portal_push_subscriptions WHERE portal_user_id=? AND endpoint=?").bind(portalUserId, endpoint).run();
+  return Number(result.meta?.changes ?? 0);
+}
+
+export async function sendPushToPortalClient(clientId: number, payload: BrowserPushPayload): Promise<PushDeliveryResult> {
+  await ensurePushSupport();
+  const keys = await getOrCreateVapidKeys();
+  const subscriptions = await getD1().prepare(`SELECT s.id,s.portal_user_id AS userId,s.endpoint,s.expiration_time AS expirationTime,s.p256dh,s.auth,s.device_label AS deviceLabel,s.platform,s.is_active AS isActive FROM portal_push_subscriptions s JOIN portal_users pu ON pu.id=s.portal_user_id WHERE pu.client_id=? AND pu.is_active=1 AND s.is_active=1 ORDER BY s.id`).bind(clientId).all<StoredPushSubscription>();
+  const result: PushDeliveryResult = { attempted: subscriptions.results.length, delivered: 0, expired: 0, failed: 0 };
+  await Promise.all(subscriptions.results.map(async (subscription) => {
+    try {
+      await webpush.sendNotification(toWebPushSubscription(subscription), JSON.stringify(payload), { vapidDetails: keys, TTL: 60 * 60 * 24, urgency: "high" });
+      result.delivered += 1;
+      await getD1().prepare("UPDATE portal_push_subscriptions SET failure_count=0,last_success_at=?,updated_at=? WHERE id=?").bind(new Date().toISOString(), new Date().toISOString(), subscription.id).run();
+    } catch (error) {
+      const statusCode = error instanceof WebPushError ? error.statusCode : undefined;
+      result.lastError ??= safeProviderFailureReason(error);
+      if (statusCode === 404 || statusCode === 410) { result.expired += 1; await getD1().prepare("UPDATE portal_push_subscriptions SET is_active=0,failure_count=failure_count+1,updated_at=? WHERE id=?").bind(new Date().toISOString(), subscription.id).run(); }
+      else { result.failed += 1; await getD1().prepare("UPDATE portal_push_subscriptions SET failure_count=failure_count+1,updated_at=? WHERE id=?").bind(new Date().toISOString(), subscription.id).run(); }
+    }
+  }));
+  return result;
+}
+
 export async function sendPushToUser(
   userId: number,
   payload: BrowserPushPayload,

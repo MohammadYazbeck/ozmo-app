@@ -237,7 +237,8 @@ test("exposes the new role-aware and mobile-friendly controls", async () => {
       ),
     ]);
 
-  assert.match(clients, /user\.role === "editor"/);
+  assert.match(clients, /const canViewAllInventory = true/);
+  assert.match(app, /\["inventory", "Inventory", "box"\]/);
   assert.match(clients, /export async function POST\(request: Request\)/);
   assert.match(clients, /INSERT INTO inventory_balances/);
   assert.match(inventory, /body\?\.reason \?\? ""/);

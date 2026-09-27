@@ -8,7 +8,7 @@ import PaymentHistory, { type Payment } from "../PaymentHistory";
 
 type View = "overview" | "calendar" | "content" | "sessions" | "services" | "archive" | "billing";
 
-type PortalCalendar = { enabled: boolean; month: string; items: Array<{ id: string; date: string; contentType: "reel" | "post"; status: "planned" | "ready" | "link_added" | "viewed" | "published"; hasReviewLink: boolean; viewedAt?: string | null }>; notifications: Array<{ id: string; itemId: string; title: string; message: string; read: boolean; createdAt: string }> };
+type PortalCalendar = { enabled: boolean; month: string; items: Array<{ id: string; date: string; contentType: "reel" | "post"; status: "planned" | "ready" | "link_added" | "viewed" | "published"; hasReviewLink: boolean; viewedAt?: string | null }>; notifications: Array<{ id: string; itemId: string | null; title: string; message: string; read: boolean; createdAt: string }> };
 
 type PortalUser = {
   id: number;
@@ -95,9 +95,11 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [month, setMonth] = useState(currentMonth());
+  const [notificationPrompt, setNotificationPrompt] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
   const previousView = useRef(view);
-  const month = currentMonth();
 
   const loadPortal = useCallback(async () => {
     setLoading(true);
@@ -135,6 +137,12 @@ export default function ClientPortal() {
   useEffect(() => {
     void loadPortal();
   }, [loadPortal]);
+
+  useEffect(() => {
+    if (!user || !("Notification" in window) || !("serviceWorker" in navigator) || Notification.permission === "denied") return;
+    const key = `ozmo-portal-notification-prompt:${user.id}`;
+    if (Notification.permission === "default" && !window.localStorage.getItem(key)) setNotificationPrompt(true);
+  }, [user]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("ozmo-portal-theme");
@@ -176,7 +184,7 @@ export default function ClientPortal() {
         </button>
       </header>
       <PortalNavigation view={view} onNavigate={setView} />
-      {calendar?.notifications.find((item) => !item.read) && (() => { const notice = calendar.notifications.find((item) => !item.read)!; return <button className={styles.portalCalendarAlert} type="button" onClick={() => { setView("calendar"); window.setTimeout(() => document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 120); }}><strong>{notice.title}</strong><span>{notice.message}</span></button>; })()}
+      {calendar?.notifications.find((item) => !item.read) && (() => { const notice = calendar.notifications.find((item) => !item.read)!; return <button className={styles.portalCalendarAlert} type="button" onClick={() => { setView("calendar"); if (!notice.itemId) void fetch("/api/portal/calendar", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notificationId: notice.id }) }).then(() => loadPortal()); window.setTimeout(() => notice.itemId && document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 120); }}><strong>{notice.title}</strong><span>{notice.message}</span></button>; })()}
 
       <main className={styles.workspace} ref={workspaceRef} key={view} id="portal-content" aria-busy={loading}>
         {error && <div className={styles.error} role="alert">{error}<button type="button" onClick={() => void loadPortal()}>إعادة المحاولة</button></div>}
@@ -185,7 +193,7 @@ export default function ClientPortal() {
         ) : view === "overview" ? (
           <Overview summary={summary} />
         ) : view === "calendar" ? (
-          <Calendar calendar={calendar} onChanged={loadPortal} />
+          <Calendar calendar={calendar} month={month} onMonth={setMonth} onChanged={loadPortal} />
         ) : view === "content" ? (
           <Content summary={summary} />
         ) : view === "sessions" ? (
@@ -198,6 +206,7 @@ export default function ClientPortal() {
           <Billing summary={summary} />
         )}
       </main>
+      {notificationPrompt && user && <aside className={styles.portalNotificationPrompt} role="dialog" aria-label="السماح بالإشعارات"><div className={styles.portalNotificationIcon}><PortalIcon name="calendar" /></div><div><strong>تنبيهات مراجعة المحتوى</strong><p>اسمح بالإشعارات لنعلمك فور جاهزية محتوى جديد للمراجعة.</p><div><button type="button" disabled={notificationBusy} onClick={() => void enablePortalNotifications(setNotificationBusy, () => setNotificationPrompt(false))}>{notificationBusy ? "جارٍ التفعيل…" : "السماح بالإشعارات"}</button><button type="button" onClick={() => { window.localStorage.setItem(`ozmo-portal-notification-prompt:${user.id}`, "later"); setNotificationPrompt(false); }}>لاحقاً</button></div></div></aside>}
       {summary && <div className={styles.contactButtons} aria-label="تواصل معنا">{summary.contact?.whatsappNumber && <a href={`https://wa.me/${summary.contact.whatsappNumber.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="واتساب"><ContactIcon name="whatsapp" /> <span>واتساب</span></a>}{summary.contact?.phoneNumber && <a href={`tel:${summary.contact.phoneNumber}`} aria-label="اتصال"><ContactIcon name="phone" /> <span>اتصال</span></a>}</div>}
     </div>
   );
@@ -336,7 +345,10 @@ function Overview({ summary }: { summary: PortalSummary }) {
 
 const PORTAL_CALENDAR_STATUS = { planned: "مجدول", ready: "جاهز", link_added: "بانتظار المراجعة", viewed: "تمت المشاهدة", published: "تم النشر" } as const;
 
-function Calendar({ calendar, onChanged }: { calendar: PortalCalendar | null; onChanged: () => Promise<void> }) {
+function portalMonthCells(month: string) { const [year, value] = month.split("-").map(Number); const first = new Date(Date.UTC(year, value - 1, 1)); const start = new Date(first); start.setUTCDate(1 - first.getUTCDay()); return Array.from({ length: 42 }, (_, index) => { const date = new Date(start); date.setUTCDate(start.getUTCDate() + index); return { key: date.toISOString().slice(0, 10), day: date.getUTCDate(), inMonth: date.getUTCMonth() === value - 1 }; }); }
+function shiftPortalMonth(month: string, amount: number) { const [year, value] = month.split("-").map(Number); const date = new Date(Date.UTC(year, value - 1 + amount, 1)); return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`; }
+
+function Calendar({ calendar, month, onMonth, onChanged }: { calendar: PortalCalendar | null; month: string; onMonth: (month: string) => void; onChanged: () => Promise<void> }) {
   async function openReview(itemId: string) {
     const tab = window.open("", "_blank");
     const response = await fetch("/api/portal/calendar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId }) });
@@ -346,7 +358,8 @@ function Calendar({ calendar, onChanged }: { calendar: PortalCalendar | null; on
     await onChanged();
   }
   if (!calendar?.enabled) return <div className={styles.page}><PageHeading title="التقويم" /><article className={styles.card}><Empty text="لم يتم تفعيل تقويم المحتوى لهذا الحساب بعد." /></article></div>;
-  return <div className={styles.page}><PageHeading title="تقويم المحتوى" month={calendar.month} />{calendar.notifications.some((item) => !item.read) && <section className={styles.calendarNotifications}>{calendar.notifications.filter((item) => !item.read).map((notice) => <button type="button" key={notice.id} onClick={() => document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><strong>{notice.title}</strong><span>{notice.message}</span></button>)}</section>}<section className={styles.calendarGrid}>{calendar.items.length ? calendar.items.map((item) => <article id={`calendar-${item.id}`} className={`${styles.calendarItem} ${item.status === "published" ? styles.calendarPublished : ""}`} key={item.id}><time>{formatDate(item.date)}</time><div><strong>{item.contentType === "reel" ? "ريل" : "منشور"}</strong><span>{PORTAL_CALENDAR_STATUS[item.status]}</span></div>{item.hasReviewLink && <button type="button" onClick={() => void openReview(item.id)}>عرض المحتوى</button>}{item.status === "published" && <em>تم النشر</em>}</article>) : <article className={styles.card}><Empty text="لا توجد عناصر مجدولة لهذا الشهر." /></article>}</section></div>;
+  const cells = portalMonthCells(month); const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Damascus" }).format(new Date());
+  return <div className={styles.page}><header className={styles.calendarPageHeader}><h1>تقويم المحتوى</h1><div><button type="button" onClick={() => onMonth(shiftPortalMonth(month, -1))} aria-label="الشهر السابق">›</button><span>{monthLabel(month)}</span><button type="button" onClick={() => onMonth(shiftPortalMonth(month, 1))} aria-label="الشهر التالي">‹</button></div></header>{calendar.notifications.some((item) => !item.read) && <section className={styles.calendarNotifications}>{calendar.notifications.filter((item) => !item.read).map((notice) => <button type="button" key={notice.id} onClick={() => notice.itemId && document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><strong>{notice.title}</strong><span>{notice.message}</span></button>)}</section>}<div className={styles.portalCalendarLegend}>{Object.entries(PORTAL_CALENDAR_STATUS).map(([status,label]) => <span className={styles[`legend_${status}`]} key={status}><i />{label}</span>)}</div><div className={styles.portalCalendarScroll}><section className={styles.portalRealCalendar}><header>{["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"].map((day) => <strong key={day}>{day}</strong>)}</header><div>{cells.map((cell) => { const dayItems = calendar.items.filter((item) => item.date === cell.key); return <article className={`${styles.portalCalendarDay} ${!cell.inMonth ? styles.outsideMonth : ""} ${cell.key === today ? styles.today : ""}`} key={cell.key}><time>{cell.day}</time><section>{dayItems.map((item) => <button id={`calendar-${item.id}`} type="button" className={`${styles.portalCalendarEvent} ${styles[`event_${item.status}`]}`} key={item.id} onClick={() => item.hasReviewLink && void openReview(item.id)}><b>{item.contentType === "reel" ? "ريل" : "منشور"}</b><span>{PORTAL_CALENDAR_STATUS[item.status]}</span>{item.hasReviewLink && <em>عرض</em>}</button>)}</section></article>; })}</div></section></div></div>;
 }
 
 function Content({ summary }: { summary: PortalSummary }) {
@@ -416,6 +429,20 @@ function ClientMark({ name, logoUrl, compact = false }: { name: string; logoUrl?
 }
 
 function currentMonth() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Damascus", year: "numeric", month: "2-digit" }).format(new Date()); }
+async function enablePortalNotifications(setBusy: (busy: boolean) => void, done: () => void) {
+  setBusy(true);
+  try {
+    const permission = await Notification.requestPermission(); if (permission !== "granted") return;
+    const registration = await navigator.serviceWorker.register("/sw.js"); await navigator.serviceWorker.ready;
+    const configResponse = await fetch("/api/portal/push", { cache: "no-store" }); const config = await configResponse.json() as { publicKey?: string };
+    if (!config.publicKey) throw new Error("Push is not configured");
+    const existing = await registration.pushManager.getSubscription();
+    const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64Key(config.publicKey) });
+    await fetch("/api/portal/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscription: subscription.toJSON(), deviceLabel: navigator.userAgent, platform: navigator.platform }) });
+    done();
+  } finally { setBusy(false); }
+}
+function base64Key(value: string) { const padding = "=".repeat((4 - value.length % 4) % 4); const decoded = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(decoded, (character) => character.charCodeAt(0)); }
 function formatDate(value: string, withTime = false) { const date = new Date(value); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat("ar-SY", { timeZone: "Asia/Damascus", day: "numeric", month: "long", year: "numeric", ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}) }).format(date); }
 function monthLabel(value: string) { const [year, month] = value.split("-").map(Number); return new Intl.DateTimeFormat("ar-SY", { month: "long", year: "numeric" }).format(new Date(Date.UTC(year, month - 1, 1))); }
 function formatMoney(cents: number, currency: string) {

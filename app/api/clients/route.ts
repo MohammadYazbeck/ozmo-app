@@ -32,11 +32,9 @@ type ExistingClientRow = {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser(request);
-    const canViewAllInventory =
-      ["admin", "account_manager", "content_manager"].includes(user.role);
-    const canViewReelInventory =
-      canViewAllInventory || user.role === "editor";
+    await requireUser(request);
+    const canViewAllInventory = true;
+    const canViewReelInventory = true;
     await ensureDatabase();
     const database = getD1();
     const [rows, settings] = await Promise.all([

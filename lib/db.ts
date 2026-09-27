@@ -364,6 +364,21 @@ async function initializeDatabase(): Promise<void> {
       read_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS portal_push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      portal_user_id INTEGER NOT NULL REFERENCES portal_users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      expiration_time INTEGER,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      device_label TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      failure_count INTEGER NOT NULL DEFAULT 0,
+      last_success_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
     "CREATE INDEX IF NOT EXISTS users_role_idx ON users(role)",
     "CREATE INDEX IF NOT EXISTS clients_active_idx ON clients(is_active)",
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_name_nocase_unique ON clients(name COLLATE NOCASE)",
@@ -399,6 +414,7 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS client_monthly_kpis_client_month_idx ON client_monthly_kpis(client_id,month)",
     "CREATE INDEX IF NOT EXISTS client_calendar_items_client_date_idx ON client_calendar_items(client_id,scheduled_date)",
     "CREATE INDEX IF NOT EXISTS portal_notifications_client_read_idx ON portal_notifications(client_id,read_at,created_at)",
+    "CREATE INDEX IF NOT EXISTS portal_push_subscriptions_user_active_idx ON portal_push_subscriptions(portal_user_id,is_active)",
   ];
 
   await database.batch(
