@@ -35,8 +35,20 @@ export async function GET(request: Request) {
     const user = await requireUser(request);
     await ensureDatabase();
     const database = getD1();
+    const requestedClientId = Number(new URL(request.url).searchParams.get("clientId"));
+    const clientId = Number.isSafeInteger(requestedClientId) && requestedClientId > 0 ? requestedClientId : null;
     const taskQuery =
-      user.role === "admin"
+      clientId
+        ? database.prepare(
+            `SELECT t.id,t.created_at AS date,u.display_name AS actor_name,u.role AS actor_role,
+                    c.name AS client_name,t.task_type,t.description,t.content_type,t.quantity,t.status
+             FROM tasks t JOIN users u ON u.id=t.user_id LEFT JOIN clients c ON c.id=t.client_id
+             LEFT JOIN reports r ON r.id=t.report_id
+             WHERE t.client_id=? AND (t.report_id IS NULL OR r.status='submitted')
+               AND NOT EXISTS (SELECT 1 FROM activity_log_hides h WHERE h.source_type='task' AND h.source_id=t.id)
+             ORDER BY t.created_at DESC,t.id DESC LIMIT 500`,
+          ).bind(clientId)
+        : user.role === "admin"
         ? database.prepare(
             `SELECT
                t.id,t.created_at AS date,u.display_name AS actor_name,

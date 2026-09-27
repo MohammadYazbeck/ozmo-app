@@ -3097,6 +3097,20 @@ textarea:focus {
   transform: translateX(2px);
 }
 
+.calendar-enable { display: flex; align-items: center; gap: 8px; }
+.calendar-rule-grid { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 10px; margin: 18px 0; overflow-x: auto; }
+.calendar-rule-grid > div { min-width: 110px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+.calendar-rule-grid strong { display: block; margin-bottom: 9px; font-size: 12px; }
+.calendar-rule-grid label { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; }
+.calendar-item-list { display: grid; gap: 10px; }
+.calendar-item { display: grid; grid-template-columns: 120px 80px 180px 1fr; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.calendar-item > span { color: var(--muted); font-weight: 700; }
+.calendar-status-published > span { color: #16804c; }
+.calendar-link-form { display: flex; gap: 8px; min-width: 0; }
+.calendar-link-form input { min-width: 160px; }
+.client-brief-copy { white-space: pre-wrap; line-height: 1.8; }
+@media (max-width: 760px) { .calendar-rule-grid { grid-template-columns: repeat(7, 120px); } .calendar-item { grid-template-columns: 1fr 1fr; } .calendar-link-form { grid-column: 1 / -1; flex-direction: column; } }
+
 .notification-permission-prompt {
   position: fixed;
   z-index: 72;

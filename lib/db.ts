@@ -331,6 +331,39 @@ async function initializeDatabase(): Promise<void> {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS client_calendar_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+      content_type TEXT NOT NULL CHECK (content_type IN ('reel','post')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (client_id,weekday,content_type)
+    )`,
+    `CREATE TABLE IF NOT EXISTS client_calendar_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      scheduled_date TEXT NOT NULL,
+      content_type TEXT NOT NULL CHECK (content_type IN ('reel','post')),
+      status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','ready','link_added','viewed','published')),
+      content_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+      publish_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+      review_url TEXT,
+      review_added_at TEXT,
+      viewed_at TEXT,
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (client_id,scheduled_date,content_type)
+    )`,
+    `CREATE TABLE IF NOT EXISTS portal_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      calendar_item_id INTEGER REFERENCES client_calendar_items(id) ON DELETE CASCADE,
+      title_ar TEXT NOT NULL,
+      message_ar TEXT NOT NULL,
+      read_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
     "CREATE INDEX IF NOT EXISTS users_role_idx ON users(role)",
     "CREATE INDEX IF NOT EXISTS clients_active_idx ON clients(is_active)",
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_name_nocase_unique ON clients(name COLLATE NOCASE)",
@@ -364,6 +397,8 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_expiry_idx ON portal_auth_sessions(expires_at)",
     "CREATE INDEX IF NOT EXISTS portal_login_attempts_updated_idx ON portal_login_attempts(updated_at)",
     "CREATE INDEX IF NOT EXISTS client_monthly_kpis_client_month_idx ON client_monthly_kpis(client_id,month)",
+    "CREATE INDEX IF NOT EXISTS client_calendar_items_client_date_idx ON client_calendar_items(client_id,scheduled_date)",
+    "CREATE INDEX IF NOT EXISTS portal_notifications_client_read_idx ON portal_notifications(client_id,read_at,created_at)",
   ];
 
   await database.batch(
@@ -391,6 +426,7 @@ async function initializeDatabase(): Promise<void> {
   );
   await ensureColumn(database, "clients", "google_drive_url", "TEXT");
   await ensureColumn(database, "clients", "client_brief", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(database, "clients", "calendar_enabled", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(database, "sessions", "reels_shot", "INTEGER");
   await ensureColumn(database, "sessions", "photos_shot", "INTEGER");
   await ensureShotReelInventorySupport(database);

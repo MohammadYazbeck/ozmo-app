@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth";
 import { ensureDatabase, getD1 } from "@/lib/db";
 import { notifySessionStatus } from "@/lib/notifications";
+import { syncCalendarFromReport } from "@/lib/content-calendar";
 import { getReportWindow } from "@/lib/schedule";
 import {
   damascusDate,
@@ -330,6 +331,7 @@ export async function POST(request: Request) {
         throw batchError;
       }
       await sendSessionAlerts(sessionAlertIds);
+      await syncCalendarFromReport(current.id).catch((error) => console.error("Calendar sync failed", error));
       return Response.json({
         ok: true,
         status: "submitted",
@@ -460,6 +462,7 @@ export async function POST(request: Request) {
     }
 
     await sendSessionAlerts(sessionAlertIds);
+    await syncCalendarFromReport(reportId).catch((error) => console.error("Calendar sync failed", error));
 
     return Response.json({
       ok: true,

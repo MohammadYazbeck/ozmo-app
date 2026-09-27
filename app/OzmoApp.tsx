@@ -249,6 +249,7 @@ type AppSection =
   | "reports"
   | "inventory"
   | "clients"
+  | "calendar"
   | "sessions"
   | "archive"
   | "team"
@@ -3153,7 +3154,10 @@ function ClientsPage({
 
 function ClientBriefPage({ clients }: { clients: Client[] }) {
   const [selected, setSelected] = useState(clients[0]?.id ?? "");
+  const [clientHistory, setClientHistory] = useState<HistoryItem[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const client = clients.find((item) => item.id === selected) ?? clients[0];
+  useEffect(() => { if (!client) return; setHistoryOpen(false); void api<{ history: HistoryItem[] }>(`/api/history?clientId=${encodeURIComponent(client.id)}`).then((result) => setClientHistory(result.history)).catch(() => setClientHistory([])); }, [client]);
 
   return (
     <div className="page-stack">
@@ -3161,9 +3165,39 @@ function ClientBriefPage({ clients }: { clients: Client[] }) {
       <div className="client-tabs">
         {clients.map((item) => <button key={item.id} className={item.id === client?.id ? "active" : ""} onClick={() => setSelected(item.id)}>{item.name}</button>)}
       </div>
-      {client ? <section className="content-card client-brief-card"><header className="section-header"><div><span className="eyebrow">{client.ozmoClientId}</span><h2>{client.name}</h2></div><span className="status-chip status-submitted">Team reference</span></header>{client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet.</p>}</section> : <div className="content-card empty-state"><strong>No active clients</strong><p>Client briefs will appear here when clients are added.</p></div>}
+      {client ? <><section className="content-card client-brief-card"><header className="section-header"><div><span className="eyebrow">{client.ozmoClientId}</span><h2>{client.name}</h2></div><span className="status-chip status-submitted">Team reference</span></header>{client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet.</p>}</section><section className="content-card"><header className="section-header"><div><span className="eyebrow">Client activity</span><h2>History</h2></div><button className="button button-secondary" type="button" onClick={() => setHistoryOpen((value) => !value)}>{historyOpen ? "Collapse history" : `Expand history (${clientHistory.length})`}</button></header>{historyOpen && <ActivityList items={clientHistory} />}</section></> : <div className="content-card empty-state"><strong>No active clients</strong><p>Client briefs will appear here when clients are added.</p></div>}
     </div>
   );
+}
+
+type CalendarItem = { id: string; clientId: string; clientName: string; date: string; contentType: "reel" | "post"; status: "planned" | "ready" | "link_added" | "viewed" | "published"; reviewUrl?: string | null; viewedAt?: string | null };
+type CalendarRule = { clientId: string; weekday: number; contentType: "reel" | "post" };
+const CALENDAR_STATUS_AR: Record<CalendarItem["status"], string> = { planned: "مجدول", ready: "جاهز", link_added: "بانتظار مراجعة العميل", viewed: "شاهده العميل", published: "تم النشر" };
+const WEEKDAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+function ContentCalendarPage({ user }: { user: User }) {
+  const [month, setMonth] = useState(todayInDamascus().slice(0, 7));
+  const [data, setData] = useState<{ clients: Array<{ id: string; name: string; enabled: boolean }>; rules: CalendarRule[]; items: CalendarItem[] }>({ clients: [], rules: [], items: [] });
+  const [selected, setSelected] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const client = data.clients.find((item) => item.id === selected) ?? data.clients[0];
+  const load = useCallback(async () => {
+    setBusy(true); setError("");
+    try { const result = await api<typeof data>(`/api/calendar?month=${month}`); setData(result); setSelected((value) => result.clients.some((item) => item.id === value) ? value : result.clients[0]?.id ?? ""); }
+    catch (loadError) { setError((loadError as Error).message); }
+    finally { setBusy(false); }
+  }, [month]);
+  useEffect(() => { void load(); }, [load]);
+  const rules = client ? data.rules.filter((rule) => rule.clientId === client.id) : [];
+  const items = client ? data.items.filter((item) => item.clientId === client.id) : [];
+  function toggleRule(weekday: number, contentType: "reel" | "post") {
+    setData((current) => ({ ...current, rules: current.rules.some((rule) => rule.clientId === client?.id && rule.weekday === weekday && rule.contentType === contentType) ? current.rules.filter((rule) => !(rule.clientId === client?.id && rule.weekday === weekday && rule.contentType === contentType)) : [...current.rules, { clientId: client!.id, weekday, contentType }] }));
+  }
+  async function saveConfig() { if (!client) return; setBusy(true); setError(""); try { await api("/api/calendar", { method: "PATCH", body: JSON.stringify({ action: "configure", clientId: client.id, enabled: client.enabled, rules: data.rules.filter((rule) => rule.clientId === client.id) }) }); await load(); } catch (saveError) { setError((saveError as Error).message); } finally { setBusy(false); } }
+  async function addLink(item: CalendarItem) { const reviewUrl = links[item.id]?.trim(); if (!reviewUrl) return; setBusy(true); setError(""); try { await api("/api/calendar", { method: "PATCH", body: JSON.stringify({ action: "link", itemId: item.id, reviewUrl }) }); setLinks((current) => ({ ...current, [item.id]: "" })); await load(); } catch (saveError) { setError((saveError as Error).message); } finally { setBusy(false); } }
+  return <div className="page-stack"><PageHeading eyebrow="Content planning" title="Client calendars" copy="Publishing days, content readiness, client review and publishing status in one place." action={<label className="archive-month-field">Month<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>} />{error && <div className="form-error">{error}</div>}<div className="client-tabs">{data.clients.map((item) => <button key={item.id} className={item.id === client?.id ? "active" : ""} onClick={() => setSelected(item.id)}>{item.name}{item.enabled && <span />}</button>)}</div>{client && <>{user.role === "admin" && <section className="content-card calendar-config"><header className="section-header"><div><span className="eyebrow">Admin setup</span><h2>Publishing schedule</h2></div><label className="calendar-enable"><input type="checkbox" checked={client.enabled} onChange={(event) => setData((current) => ({ ...current, clients: current.clients.map((item) => item.id === client.id ? { ...item, enabled: event.target.checked } : item) }))} /> Enable calendar</label></header>{client.enabled && <div className="calendar-rule-grid">{WEEKDAYS_AR.map((day, weekday) => <div key={day}><strong>{day}</strong>{(["reel", "post"] as const).map((type) => <label key={type}><input type="checkbox" checked={rules.some((rule) => rule.weekday === weekday && rule.contentType === type)} onChange={() => toggleRule(weekday, type)} />{type === "reel" ? "ريل" : "منشور"}</label>)}</div>)}</div>}<button className="button button-primary" type="button" onClick={() => void saveConfig()} disabled={busy}>حفظ إعدادات التقويم</button></section>}{!client.enabled ? <div className="content-card empty-state"><strong>Calendar is not enabled</strong><p>An admin can enable it and select publishing days.</p></div> : <section className="content-card calendar-board"><header className="section-header"><div><span className="eyebrow">{client.name}</span><h2>تقويم المحتوى</h2></div></header><div className="calendar-item-list">{items.length ? items.map((item) => <article className={`calendar-item calendar-status-${item.status}`} key={item.id}><time>{item.date}</time><strong>{item.contentType === "reel" ? "ريل" : "منشور"}</strong><span>{CALENDAR_STATUS_AR[item.status]}</span>{item.viewedAt && <small>تمت المشاهدة من العميل</small>}{['admin','account_manager'].includes(user.role) && ['ready','link_added','viewed'].includes(item.status) && <div className="calendar-link-form"><input type="url" value={links[item.id] ?? ""} onChange={(event) => setLinks((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="رابط المراجعة https://..." /><button className="button button-secondary" type="button" disabled={busy || !links[item.id]?.trim()} onClick={() => void addLink(item)}>إرسال للعميل</button></div>}</article>) : <div className="empty-state compact"><strong>لا توجد أيام نشر</strong><p>اختر أيام النشر من إعدادات التقويم.</p></div>}</div></section>}</>}</div>;
 }
 
 function MonthArchivePage({
@@ -5755,6 +5789,7 @@ function AppShell({
         ["reports", "Reports", "activity"],
         ["inventory", "Inventory", "box"],
         ["clients", "Clients", "clients"],
+        ["calendar", "Content calendar", "calendar"],
         ["sessions", "Sessions", "calendar"],
         ["archive", "Month archive", "history"],
         ["team", "Team", "team"],
@@ -5771,6 +5806,7 @@ function AppShell({
           ? ([["sessions", "Sessions", "calendar"]] as string[][])
           : []),
         ["clients", "Client briefs", "clients"],
+        ["calendar", "Content calendar", "calendar"],
         ["settings", "Notifications", "settings"],
         ["help", "Help & rules", "help"],
       ];
@@ -6146,6 +6182,7 @@ export default function OzmoApp() {
           />
         );
       }
+      if (section === "calendar") return <ContentCalendarPage user={user} />;
       if (section === "sessions") {
         return <SessionsPage user={user} clients={clients} sessions={sessions} onChanged={loadData} />;
       }
@@ -6187,6 +6224,7 @@ export default function OzmoApp() {
       }
       if (section === "history") return <HistoryPage items={history} ownOnly />;
       if (section === "clients") return <ClientBriefPage clients={clients} />;
+      if (section === "calendar") return <ContentCalendarPage user={user} />;
       if (
         section === "inventory" &&
         (user.role === "account_manager" || user.role === "editor" || user.role === "content_manager")

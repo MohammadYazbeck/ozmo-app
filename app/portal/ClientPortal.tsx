@@ -6,7 +6,9 @@ import Image from "next/image";
 import styles from "./portal.module.css";
 import PaymentHistory, { type Payment } from "../PaymentHistory";
 
-type View = "overview" | "content" | "sessions" | "services" | "archive" | "billing";
+type View = "overview" | "calendar" | "content" | "sessions" | "services" | "archive" | "billing";
+
+type PortalCalendar = { enabled: boolean; month: string; items: Array<{ id: string; date: string; contentType: "reel" | "post"; status: "planned" | "ready" | "link_added" | "viewed" | "published"; hasReviewLink: boolean; viewedAt?: string | null }>; notifications: Array<{ id: string; itemId: string; title: string; message: string; read: boolean; createdAt: string }> };
 
 type PortalUser = {
   id: number;
@@ -78,6 +80,7 @@ type PortalArchive = {
 
 const navigation: Array<{ id: View; label: string; mobileLabel: string }> = [
   { id: "overview", label: "نظرة عامة", mobileLabel: "الرئيسية" },
+  { id: "calendar", label: "التقويم", mobileLabel: "التقويم" },
   { id: "billing", label: "الدفعات", mobileLabel: "الدفعات" },
   { id: "services", label: "خدماتنا", mobileLabel: "خدماتنا" },
   { id: "archive", label: "الأرشيف", mobileLabel: "الأرشيف" },
@@ -87,6 +90,7 @@ export default function ClientPortal() {
   const [user, setUser] = useState<PortalUser | null>(null);
   const [summary, setSummary] = useState<PortalSummary | null>(null);
   const [archives, setArchives] = useState<PortalArchive[]>([]);
+  const [calendar, setCalendar] = useState<PortalCalendar | null>(null);
   const [view, setView] = useState<View>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,9 +112,10 @@ export default function ClientPortal() {
       }
       const me = (await meResponse.json()) as { user: PortalUser };
       setUser(me.user);
-      const [summaryResponse, archiveResponse] = await Promise.all([
+      const [summaryResponse, archiveResponse, calendarResponse] = await Promise.all([
         fetch(`/api/portal/summary?month=${month}`, { cache: "no-store" }),
         fetch("/api/portal/archive", { cache: "no-store" }),
+        fetch(`/api/portal/calendar?month=${month}`, { cache: "no-store" }),
       ]);
       if (!summaryResponse.ok) throw new Error("تعذر تحميل بيانات المحتوى حالياً");
       setSummary((await summaryResponse.json()) as PortalSummary);
@@ -119,6 +124,7 @@ export default function ClientPortal() {
       } else {
         setArchives([]);
       }
+      setCalendar(calendarResponse.ok ? await calendarResponse.json() as PortalCalendar : null);
     } catch (loadError) {
       setError((loadError as Error).message);
     } finally {
@@ -155,6 +161,7 @@ export default function ClientPortal() {
     setUser(null);
     setSummary(null);
     setArchives([]);
+    setCalendar(null);
   }
 
   return (
@@ -169,6 +176,7 @@ export default function ClientPortal() {
         </button>
       </header>
       <PortalNavigation view={view} onNavigate={setView} />
+      {calendar?.notifications.find((item) => !item.read) && (() => { const notice = calendar.notifications.find((item) => !item.read)!; return <button className={styles.portalCalendarAlert} type="button" onClick={() => { setView("calendar"); window.setTimeout(() => document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 120); }}><strong>{notice.title}</strong><span>{notice.message}</span></button>; })()}
 
       <main className={styles.workspace} ref={workspaceRef} key={view} id="portal-content" aria-busy={loading}>
         {error && <div className={styles.error} role="alert">{error}<button type="button" onClick={() => void loadPortal()}>إعادة المحاولة</button></div>}
@@ -176,6 +184,8 @@ export default function ClientPortal() {
           <PortalLoading compact />
         ) : view === "overview" ? (
           <Overview summary={summary} />
+        ) : view === "calendar" ? (
+          <Calendar calendar={calendar} onChanged={loadPortal} />
         ) : view === "content" ? (
           <Content summary={summary} />
         ) : view === "sessions" ? (
@@ -198,6 +208,7 @@ function PortalIcon({ name }: { name: View | "more" | "close" | "logout" | "chat
     chat: "M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z",
     phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.4 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z",
     overview: "m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z",
+    calendar: "M3 5h18v16H3z M8 3v4 M16 3v4 M3 10h18",
     content: "M4 3h16v18H4z M4 8h16 M9 3v5 M15 3v5 m-5 5 5 3-5 3z",
     sessions: "M3 7h4l2-3h6l2 3h4v13H3z M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
     billing: "M4 3h16v18l-4-2-4 2-4-2-4 2z M8 8h8 M8 12h8 M8 16h3",
@@ -321,6 +332,21 @@ function Overview({ summary }: { summary: PortalSummary }) {
       )}
     </article>
   </div>;
+}
+
+const PORTAL_CALENDAR_STATUS = { planned: "مجدول", ready: "جاهز", link_added: "بانتظار المراجعة", viewed: "تمت المشاهدة", published: "تم النشر" } as const;
+
+function Calendar({ calendar, onChanged }: { calendar: PortalCalendar | null; onChanged: () => Promise<void> }) {
+  async function openReview(itemId: string) {
+    const tab = window.open("", "_blank");
+    const response = await fetch("/api/portal/calendar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId }) });
+    const body = await response.json().catch(() => ({})) as { url?: string; error?: string };
+    if (!response.ok || !body.url) { tab?.close(); return; }
+    if (tab) tab.location.replace(body.url); else window.location.assign(body.url);
+    await onChanged();
+  }
+  if (!calendar?.enabled) return <div className={styles.page}><PageHeading title="التقويم" /><article className={styles.card}><Empty text="لم يتم تفعيل تقويم المحتوى لهذا الحساب بعد." /></article></div>;
+  return <div className={styles.page}><PageHeading title="تقويم المحتوى" month={calendar.month} />{calendar.notifications.some((item) => !item.read) && <section className={styles.calendarNotifications}>{calendar.notifications.filter((item) => !item.read).map((notice) => <button type="button" key={notice.id} onClick={() => document.getElementById(`calendar-${notice.itemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><strong>{notice.title}</strong><span>{notice.message}</span></button>)}</section>}<section className={styles.calendarGrid}>{calendar.items.length ? calendar.items.map((item) => <article id={`calendar-${item.id}`} className={`${styles.calendarItem} ${item.status === "published" ? styles.calendarPublished : ""}`} key={item.id}><time>{formatDate(item.date)}</time><div><strong>{item.contentType === "reel" ? "ريل" : "منشور"}</strong><span>{PORTAL_CALENDAR_STATUS[item.status]}</span></div>{item.hasReviewLink && <button type="button" onClick={() => void openReview(item.id)}>عرض المحتوى</button>}{item.status === "published" && <em>تم النشر</em>}</article>) : <article className={styles.card}><Empty text="لا توجد عناصر مجدولة لهذا الشهر." /></article>}</section></div>;
 }
 
 function Content({ summary }: { summary: PortalSummary }) {

@@ -1,6 +1,7 @@
 import { AuthError, authErrorResponse, requireAdmin } from "@/lib/auth";
 import { ensureDatabase, getD1 } from "@/lib/db";
 import { damascusDate, localDamascusDateTimeToIso } from "@/lib/time";
+import { syncCalendarFromReport } from "@/lib/content-calendar";
 
 const OTHER_CLIENT_ID = "__other__";
 const AGENCY_ACTIONS = new Set([
@@ -204,6 +205,9 @@ export async function PATCH(request: Request) {
 
     const summary = normalized.map((task) => task.notes).join("\n").slice(0, 4_000);
     const statements: D1PreparedStatement[] = [
+      database.prepare(`DELETE FROM portal_notifications WHERE calendar_item_id IN (SELECT id FROM client_calendar_items WHERE content_task_id IN (SELECT id FROM tasks WHERE report_id=?))`).bind(report.id),
+      database.prepare(`UPDATE client_calendar_items SET status='planned',content_task_id=NULL,review_url=NULL,review_added_at=NULL,viewed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE content_task_id IN (SELECT id FROM tasks WHERE report_id=?) AND status<>'published'`).bind(report.id),
+      database.prepare(`UPDATE client_calendar_items SET status=CASE WHEN viewed_at IS NOT NULL THEN 'viewed' WHEN review_url IS NOT NULL THEN 'link_added' ELSE 'ready' END,publish_task_id=NULL,published_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE publish_task_id IN (SELECT id FROM tasks WHERE report_id=?)`).bind(report.id),
       database.prepare("DELETE FROM tasks WHERE report_id=?").bind(report.id),
       database.prepare("UPDATE reports SET summary=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(summary, report.id),
     ];
@@ -261,6 +265,7 @@ export async function PATCH(request: Request) {
       }
     }
     await database.batch(statements);
+    await syncCalendarFromReport(report.id).catch((error) => console.error("Calendar sync failed", error));
     return Response.json({ ok: true, reportId: String(report.id), status: report.status });
   } catch (error) {
     return authErrorResponse(error);
