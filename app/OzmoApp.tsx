@@ -1159,12 +1159,14 @@ function StaffReport({
   clients,
   sessions,
   report,
+  onNavigate,
   onRefresh,
 }: {
   user: User;
   clients: Client[];
   sessions: SessionItem[];
   report: DailyReport;
+  onNavigate: (section: AppSection) => void;
   onRefresh: () => Promise<void>;
 }) {
   const [tasks, setTasks] = useState<ReportTask[]>(
@@ -1767,6 +1769,8 @@ function StaffReport({
         )}
       </section>
 
+      <MiniCalendarCard onOpen={() => onNavigate("calendar")} />
+
       <section className="rule-strip">
         <Icon name="spark" size={19} />
         <div>
@@ -2060,6 +2064,8 @@ function AdminDashboard({
           </div>
         </article>
       </section>
+
+      <MiniCalendarCard onOpen={() => onNavigate("calendar")} />
 
       <section className="dashboard-grid dashboard-grid-lower">
         <article className="content-card">
@@ -3182,6 +3188,41 @@ function monthCells(month: string) {
   return Array.from({ length: 42 }, (_, index) => { const date = new Date(start); date.setUTCDate(start.getUTCDate() + index); return { key: date.toISOString().slice(0, 10), day: date.getUTCDate(), inMonth: date.getUTCMonth() === value - 1 }; });
 }
 function shiftCalendarMonth(month: string, amount: number) { const [year, value] = month.split("-").map(Number); const date = new Date(Date.UTC(year, value - 1 + amount, 1)); return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`; }
+
+function MiniCalendarCard({ onOpen }: { onOpen: () => void }) {
+  const month = todayInDamascus().slice(0, 7);
+  const [items, setItems] = useState<CalendarItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api<{ items: CalendarItem[] }>(`/api/calendar?month=${month}`)
+      .then((result) => { if (active) setItems(result.items); })
+      .catch(() => undefined)
+      .finally(() => { if (active) setLoaded(true); });
+    return () => { active = false; };
+  }, [month]);
+  const byDate = new Map<string, CalendarItem[]>();
+  items.forEach((item) => byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]));
+  const cells = monthCells(month);
+  return (
+    <article className="content-card mini-calendar-card">
+      <header className="section-header">
+        <div><span className="eyebrow">Publishing overview</span><h2>Content calendar</h2></div>
+        <button className="text-button" type="button" onClick={onOpen}>Open calendar <Icon name="arrow" size={15} /></button>
+      </header>
+      {loaded && !items.length ? <div className="mini-calendar-empty">No scheduled posts or reels this month.</div> : (
+        <div className="mini-calendar-grid" aria-label="Mini content calendar">
+          {WEEKDAYS_AR.map((day) => <strong key={day}>{day.slice(0, 2)}</strong>)}
+          {cells.map((cell) => {
+            const dayItems = byDate.get(cell.key) ?? [];
+            const status = dayItems.some((item) => item.status === "published") ? "published" : dayItems.some((item) => item.status === "link_added" || item.status === "viewed") ? "link_added" : dayItems.some((item) => item.status === "ready") ? "ready" : dayItems.length ? "planned" : "";
+            return <button type="button" className={`mini-calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.key === todayInDamascus() ? "today" : ""}`} key={cell.key} onClick={onOpen}><span>{cell.day}</span>{dayItems.length > 0 && <i className={`mini-calendar-dot ${status}`} title={`${dayItems.length} items`} />}</button>;
+          })}
+        </div>
+      )}
+    </article>
+  );
+}
 
 function ContentCalendarPage({ user }: { user: User }) {
   const [month, setMonth] = useState(todayInDamascus().slice(0, 7));
@@ -5789,7 +5830,6 @@ function AppShell({
         ["reports", "Reports", "activity"],
         ["inventory", "Inventory", "box"],
         ["clients", "Clients", "clients"],
-        ["calendar", "Content calendar", "calendar"],
         ["sessions", "Sessions", "calendar"],
         ["archive", "Month archive", "history"],
         ["team", "Team", "team"],
@@ -5804,7 +5844,6 @@ function AppShell({
           ? ([["sessions", "Sessions", "calendar"]] as string[][])
           : []),
         ["clients", "Client briefs", "clients"],
-        ["calendar", "Content calendar", "calendar"],
         ["settings", "Notifications", "settings"],
         ["help", "Help & rules", "help"],
       ];
@@ -6216,6 +6255,7 @@ export default function OzmoApp() {
             clients={clients}
             sessions={sessions}
             report={report}
+            onNavigate={setSection}
             onRefresh={loadData}
           />
         );

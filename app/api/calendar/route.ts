@@ -45,7 +45,7 @@ export async function PATCH(request: Request) {
       return Response.json({ ok: true });
     }
     if (body?.action === "link") {
-      if (!['admin','account_manager'].includes(user.role)) throw new AuthError(403, "MANAGER_REQUIRED", "Only account managers can add review links.");
+      if (!['admin','account_manager'].includes(user.role)) throw new AuthError(403, "MANAGER_REQUIRED", "Only administrators and account managers can add review links.");
       const itemId = Number(body.itemId);
       let reviewUrl: string;
       try { reviewUrl = new URL(String(body.reviewUrl)).toString(); } catch { throw new AuthError(400, "INVALID_URL", "Enter a valid review link."); }
