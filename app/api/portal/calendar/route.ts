@@ -18,10 +18,10 @@ export async function GET(request: Request) {
        FROM client_calendar_items WHERE client_id=? AND scheduled_date>=? AND scheduled_date<? ORDER BY scheduled_date,id`,
     ).bind(user.clientId, `${month}-01`, nextMonth(month)).all<{ id: number; scheduled_date: string; content_type: string; status: string; review_url: string | null; viewed_at: string | null; published_at: string | null }>();
     const notifications = await db.prepare(
-      `SELECT id,calendar_item_id,title_ar,message_ar,read_at,created_at FROM portal_notifications
+      `SELECT id,calendar_item_id,title_ar,message_ar,title_en,message_en,read_at,created_at FROM portal_notifications
        WHERE client_id=? ORDER BY created_at DESC LIMIT 20`,
-    ).bind(user.clientId).all<{ id: number; calendar_item_id: number | null; title_ar: string; message_ar: string; read_at: string | null; created_at: string }>();
-    return Response.json({ enabled: Boolean(client?.calendar_enabled), month, items: items.results.map((item) => ({ id: String(item.id), date: item.scheduled_date, contentType: item.content_type, status: item.status, hasReviewLink: Boolean(item.review_url), viewedAt: item.viewed_at, publishedAt: item.published_at })), notifications: notifications.results.map((item) => ({ id: String(item.id), itemId: item.calendar_item_id == null ? null : String(item.calendar_item_id), title: item.title_ar, message: item.message_ar, read: Boolean(item.read_at), createdAt: item.created_at })) }, { headers: { "Cache-Control": "no-store" } });
+    ).bind(user.clientId).all<{ id: number; calendar_item_id: number | null; title_ar: string; message_ar: string; title_en: string | null; message_en: string | null; read_at: string | null; created_at: string }>();
+    return Response.json({ enabled: Boolean(client?.calendar_enabled), month, items: items.results.map((item) => ({ id: String(item.id), date: item.scheduled_date, contentType: item.content_type, status: item.status, hasReviewLink: Boolean(item.review_url), viewedAt: item.viewed_at, publishedAt: item.published_at })), notifications: notifications.results.map((item) => ({ id: String(item.id), itemId: item.calendar_item_id == null ? null : String(item.calendar_item_id), titleAr: item.title_ar, messageAr: item.message_ar, titleEn: item.title_en ?? item.title_ar, messageEn: item.message_en ?? item.message_ar, read: Boolean(item.read_at), createdAt: item.created_at })) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return authErrorResponse(error); }
 }
 

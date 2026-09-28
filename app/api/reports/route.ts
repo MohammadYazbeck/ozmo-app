@@ -6,6 +6,7 @@ import {
 import { ensureDatabase, getD1 } from "@/lib/db";
 import { notifySessionStatus } from "@/lib/notifications";
 import { syncCalendarFromReport } from "@/lib/content-calendar";
+import { notifyPortalClient } from "@/lib/portal-notifications";
 import { getReportWindow } from "@/lib/schedule";
 import {
   damascusDate,
@@ -332,6 +333,7 @@ export async function POST(request: Request) {
       }
       await sendSessionAlerts(sessionAlertIds);
       await syncCalendarFromReport(current.id).catch((error) => console.error("Calendar sync failed", error));
+      await notifyReportClients(tasks);
       return Response.json({
         ok: true,
         status: "submitted",
@@ -463,6 +465,7 @@ export async function POST(request: Request) {
 
     await sendSessionAlerts(sessionAlertIds);
     await syncCalendarFromReport(reportId).catch((error) => console.error("Calendar sync failed", error));
+    await notifyReportClients(tasks);
 
     return Response.json({
       ok: true,
@@ -473,6 +476,19 @@ export async function POST(request: Request) {
   } catch (error) {
     return authErrorResponse(error);
   }
+}
+
+async function notifyReportClients(tasks: NormalizedTask[]) {
+  const clients = new Map<number, string>();
+  for (const task of tasks) {
+    if (task.clientId && task.status === "completed") clients.set(task.clientId, task.clientName ?? "");
+  }
+  await Promise.all([...clients.keys()].map((clientId) => notifyPortalClient(clientId, {
+    titleAr: "تحديث جديد على حسابكم",
+    messageAr: "أضاف فريق OZMO تحديثاً جديداً على أعمالكم لهذا الشهر.",
+    titleEn: "New account update",
+    messageEn: "The OZMO team added a new update to your work for this month.",
+  }).catch((error) => console.error("Portal report notification failed", error))));
 }
 
 function appendCommittedTaskStatements(

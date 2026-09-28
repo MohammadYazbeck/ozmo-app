@@ -10,6 +10,7 @@ import {
   notifySessionStatus,
   type SessionRecord,
 } from "@/lib/notifications";
+import { notifyPortalClient } from "@/lib/portal-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,12 @@ export async function POST(request: Request) {
         notes ? `. Notes: ${notes}` : ""
       }`,
     });
+    await notifyPortalClient(client.id, {
+      titleAr: "تم تسجيل جلسة تصوير",
+      messageAr: `تمت جدولة جلسة التصوير بتاريخ ${scheduledFor}.`,
+      titleEn: "Photo session scheduled",
+      messageEn: `Your photo session has been scheduled for ${scheduledFor}.`,
+    }).catch((error) => console.error("Portal session notification failed", error));
     return Response.json({ session: await getSession(id) }, { status: 201 });
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -521,6 +528,16 @@ export async function PUT(request: Request) {
     });
     if (enteredAlertState) {
       await notifySessionStatus(current.id);
+    }
+    if (rescheduled || status !== currentStatus) {
+      const statusCopy = status === "completed"
+        ? { titleAr: "اكتملت جلسة التصوير", messageAr: `تم تسجيل الجلسة وإضافة ${reelsShot ?? 0} ريل مصور.`, titleEn: "Photo session completed", messageEn: `The session was recorded with ${reelsShot ?? 0} shot reel(s).` }
+        : status === "cancelled"
+          ? { titleAr: "تم إلغاء جلسة التصوير", messageAr: "تم إلغاء جلسة التصوير المجدولة.", titleEn: "Photo session cancelled", messageEn: "Your scheduled photo session was cancelled." }
+          : status === "missed"
+            ? { titleAr: "تحديث جلسة التصوير", messageAr: "تم تسجيل جلسة التصوير كجلسة فائتة.", titleEn: "Photo session update", messageEn: "The photo session was marked as missed." }
+            : { titleAr: "تم تحديث جلسة التصوير", messageAr: `موعد الجلسة الجديد هو ${scheduledFor}.`, titleEn: "Photo session updated", messageEn: `The new session date is ${scheduledFor}.` };
+      await notifyPortalClient(clientId, statusCopy).catch((error) => console.error("Portal session notification failed", error));
     }
     return Response.json({ session: await getSession(current.id) });
   } catch (error) {

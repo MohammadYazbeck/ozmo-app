@@ -2,6 +2,7 @@ import { AuthError, authErrorResponse, requireAdmin } from "@/lib/auth";
 import { ensureDatabase, getD1 } from "@/lib/db";
 import { damascusDate, localDamascusDateTimeToIso } from "@/lib/time";
 import { syncCalendarFromReport } from "@/lib/content-calendar";
+import { notifyPortalClient } from "@/lib/portal-notifications";
 
 const OTHER_CLIENT_ID = "__other__";
 const AGENCY_ACTIONS = new Set([
@@ -266,6 +267,18 @@ export async function PATCH(request: Request) {
     }
     await database.batch(statements);
     await syncCalendarFromReport(report.id).catch((error) => console.error("Calendar sync failed", error));
+    await Promise.all([...new Set(normalized.filter((task) => task.clientId && task.status === "completed").map((task) => task.clientId as number))].map((clientId) => notifyPortalClient(clientId, {
+      titleAr: "تحديث جديد على حسابكم",
+      messageAr: "أضاف فريق OZMO تحديثاً جديداً على أعمالكم.",
+      titleEn: "New account update",
+      messageEn: "The OZMO team added a new update to your work.",
+    }).catch((error) => console.error("Portal admin report notification failed", error))));
+    await Promise.all(normalized.filter((task) => task.actionType === "session_scheduled" && task.clientId).map((task) => notifyPortalClient(task.clientId as number, {
+      titleAr: "تم تسجيل جلسة تصوير",
+      messageAr: "تمت جدولة جلسة تصوير جديدة لكم.",
+      titleEn: "Photo session scheduled",
+      messageEn: "A new photo session has been scheduled for you.",
+    }).catch((error) => console.error("Portal admin session notification failed", error))));
     return Response.json({ ok: true, reportId: String(report.id), status: report.status });
   } catch (error) {
     return authErrorResponse(error);

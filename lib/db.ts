@@ -445,6 +445,8 @@ async function initializeDatabase(): Promise<void> {
   await ensureColumn(database, "clients", "calendar_enabled", "INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(database, "sessions", "reels_shot", "INTEGER");
   await ensureColumn(database, "sessions", "photos_shot", "INTEGER");
+  await ensureColumn(database, "portal_notifications", "title_en", "TEXT");
+  await ensureColumn(database, "portal_notifications", "message_en", "TEXT");
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);
   await database
@@ -510,7 +512,7 @@ async function initializeDatabase(): Promise<void> {
 
 async function ensureColumn(
   database: D1Database,
-  tableName: "clients" | "tasks" | "sessions",
+  tableName: "clients" | "tasks" | "sessions" | "portal_notifications",
   columnName: string,
   definition: string,
 ) {
