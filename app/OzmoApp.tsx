@@ -5830,6 +5830,7 @@ function AppShell({
         ["reports", "Reports", "activity"],
         ["inventory", "Inventory", "box"],
         ["clients", "Clients", "clients"],
+        ["calendar", "Content calendar", "calendar"],
         ["sessions", "Sessions", "calendar"],
         ["archive", "Month archive", "history"],
         ["team", "Team", "team"],
@@ -5844,6 +5845,7 @@ function AppShell({
           ? ([["sessions", "Sessions", "calendar"]] as string[][])
           : []),
         ["clients", "Client briefs", "clients"],
+        ["calendar", "Content calendar", "calendar"],
         ["settings", "Notifications", "settings"],
         ["help", "Help & rules", "help"],
       ];
