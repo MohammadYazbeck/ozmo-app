@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const start = `${month}-01`;
     const end = new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10);
     const db = getD1();
-    const [team, clients, sessions, totals] = await Promise.all([
+    const [team, clients, sessions, totals, work] = await Promise.all([
       db.prepare(`SELECT u.id,u.display_name AS displayName,u.role,
         (SELECT COUNT(*) FROM reports r WHERE r.user_id=u.id AND r.report_date BETWEEN ? AND ? AND r.status='submitted') AS submittedReports,
         (SELECT COUNT(*) FROM missing_report_days m WHERE m.user_id=u.id AND m.report_date BETWEEN ? AND ?) AS missingReports,
@@ -31,7 +31,16 @@ export async function GET(request: Request) {
         WHERE c.is_active=1 GROUP BY c.id ORDER BY c.name`).bind(start,end).all(),
       db.prepare(`SELECT status,COUNT(*) AS count,COALESCE(SUM(reels_shot),0) AS reelsShot,COALESCE(SUM(photos_shot),0) AS photosShot FROM sessions WHERE date(scheduled_for) BETWEEN ? AND ? GROUP BY status`).bind(start,end).all(),
       db.prepare(`SELECT COUNT(DISTINCT r.id) AS reports,COUNT(DISTINCT t.id) AS tasks,COALESCE(SUM(CASE WHEN t.action='produced' THEN t.quantity ELSE 0 END),0) AS produced,COALESCE(SUM(CASE WHEN t.action='published' THEN t.quantity ELSE 0 END),0) AS published FROM reports r LEFT JOIN tasks t ON t.report_id=r.id WHERE r.report_date BETWEEN ? AND ? AND r.status='submitted'`).bind(start,end).first(),
+      db.prepare(`SELECT t.user_id AS userId,t.task_type AS actionType,COALESCE(c.name,'Agency / other') AS clientName,COUNT(*) AS taskCount,SUM(t.quantity) AS quantity
+        FROM tasks t JOIN reports r ON r.id=t.report_id LEFT JOIN clients c ON c.id=t.client_id
+        WHERE t.occurred_on BETWEEN ? AND ? AND r.status='submitted'
+        GROUP BY t.user_id,t.task_type,c.name ORDER BY t.user_id,quantity DESC`).bind(start,end).all(),
     ]);
-    return Response.json({ month, startDate:start, endDate:end, totals, team:team.results, clients:clients.results, sessions:sessions.results }, { headers:{ "Cache-Control":"no-store" } });
+    const workByUser = new Map<number, unknown[]>();
+    for (const item of work.results as Array<Record<string, unknown>>) {
+      const userId = Number(item.userId);
+      workByUser.set(userId, [...(workByUser.get(userId) ?? []), item]);
+    }
+    return Response.json({ month, startDate:start, endDate:end, totals, team:(team.results as Array<Record<string, unknown>>).map((item) => ({ ...item, work: workByUser.get(Number(item.id)) ?? [] })), clients:clients.results, sessions:sessions.results }, { headers:{ "Cache-Control":"no-store" } });
   } catch (error) { return authErrorResponse(error); }
 }
