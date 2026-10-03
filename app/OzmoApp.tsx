@@ -150,6 +150,16 @@ type MonthArchive = {
   }>;
 };
 
+type MonthlyTeamReport = {
+  month: string;
+  startDate: string;
+  endDate: string;
+  totals: { reports: number; tasks: number; produced: number; published: number };
+  team: Array<{ id: number; displayName: string; role: Role; submittedReports: number; missingReports: number; deductions: number; deductionCents: number; tasks: number; completedQuantity: number }>;
+  clients: Array<{ id: number; name: string; tasks: number; produced: number; published: number; drafts: number }>;
+  sessions: Array<{ status: string; count: number; reelsShot: number; photosShot: number }>;
+};
+
 type DashboardData = {
   today: string;
   reportDeadline?: string;
@@ -3241,6 +3251,24 @@ function ContentCalendarPage({ user }: { user: User }) {
   return <div className="page-stack"><PageHeading eyebrow="Content planning" title="Client calendars" copy="A real monthly view for publishing, review and delivery." action={<div className="calendar-month-controls"><button type="button" onClick={() => setMonth(shiftCalendarMonth(month, -1))} aria-label="Previous month">‹</button><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /><button type="button" onClick={() => setMonth(shiftCalendarMonth(month, 1))} aria-label="Next month">›</button></div>} />{error && <div className="form-error">{error}</div>}{message && <div className="form-success">{message}</div>}<div className="client-tabs">{data.clients.map((item) => <button key={item.id} className={item.id === client?.id ? "active" : ""} onClick={() => setSelected(item.id)}>{item.name}{item.enabled && <span />}</button>)}</div>{client && <>{user.role === "admin" && <div className="calendar-admin-actions"><button className="button button-secondary" type="button" onClick={() => setConfigOpen(true)}><Icon name="settings" size={16} /> Calendar settings</button><button className="button button-primary" type="button" onClick={() => setNoticeOpen(true)}><Icon name="bell" size={16} /> Notify client</button></div>}{!client.enabled ? <div className="content-card empty-state"><strong>Calendar is not enabled</strong><p>An admin can enable it and select publishing days.</p></div> : <section className="content-card calendar-board"><header className="calendar-toolbar"><div><span className="eyebrow">{client.name}</span><h2>{new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`))}</h2></div><div className="calendar-legend">{Object.entries(CALENDAR_STATUS_AR).map(([status, label]) => <span className={`calendar-legend-${status}`} key={status}><i />{label}</span>)}</div></header><div className="real-calendar-scroll"><div className="real-calendar"><div className="calendar-weekdays">{WEEKDAYS_AR.map((day) => <strong key={day}>{day}</strong>)}</div><div className="calendar-days">{cells.map((cell) => { const dayItems = items.filter((item) => item.date === cell.key); return <div className={`calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.key === today ? "today" : ""}`} key={cell.key}><time>{cell.day}</time><div className="calendar-day-items">{dayItems.map((item) => <button type="button" className={`calendar-event calendar-event-${item.status}`} key={item.id} onClick={() => { if (['admin','account_manager'].includes(user.role) && ['ready','link_added','viewed'].includes(item.status)) { setReviewItem(item); setReviewUrl(item.reviewUrl ?? ""); } }}><b>{item.contentType === "reel" ? "ريل" : "منشور"}</b><span>{CALENDAR_STATUS_AR[item.status]}</span></button>)}</div></div>; })}</div></div></div></section>}</>}{configOpen && client && <div className="modal-backdrop" role="presentation"><section className="calendar-modal" role="dialog" aria-modal="true"><header><div><span className="eyebrow">Admin setup</span><h2>Publishing schedule</h2></div><button type="button" onClick={() => setConfigOpen(false)} aria-label="Close"><Icon name="close" /></button></header><label className="calendar-enable"><input type="checkbox" checked={client.enabled} onChange={(event) => setData((current) => ({ ...current, clients: current.clients.map((item) => item.id === client.id ? { ...item, enabled: event.target.checked } : item) }))} /> Enable calendar for {client.name}</label>{client.enabled && <div className="calendar-rule-grid">{WEEKDAYS_AR.map((day, weekday) => <div key={day}><strong>{day}</strong>{(["reel", "post"] as const).map((type) => <label key={type}><input type="checkbox" checked={rules.some((rule) => rule.weekday === weekday && rule.contentType === type)} onChange={() => toggleRule(weekday, type)} />{type === "reel" ? "ريل" : "منشور"}</label>)}</div>)}</div>}<button className="button button-primary" type="button" onClick={() => void saveConfig()} disabled={busy}>Save calendar</button></section></div>}{reviewItem && <div className="modal-backdrop"><section className="calendar-modal" role="dialog" aria-modal="true"><header><div><span className="eyebrow">{reviewItem.date}</span><h2>إرسال المحتوى للعميل</h2></div><button type="button" onClick={() => setReviewItem(null)} aria-label="Close"><Icon name="close" /></button></header><label>رابط المراجعة<input type="url" value={reviewUrl} onChange={(event) => setReviewUrl(event.target.value)} placeholder="https://..." autoFocus /></label><button className="button button-primary" type="button" disabled={busy || !reviewUrl.trim()} onClick={() => void addLink()}>إرسال للعميل</button></section></div>}{noticeOpen && client && <div className="modal-backdrop"><section className="calendar-modal" role="dialog" aria-modal="true"><header><div><span className="eyebrow">{client.name}</span><h2>إرسال إشعار للعميل</h2></div><button type="button" onClick={() => setNoticeOpen(false)} aria-label="Close"><Icon name="close" /></button></header><label>العنوان<input dir="rtl" value={noticeTitle} maxLength={100} onChange={(event) => setNoticeTitle(event.target.value)} /></label><label>الرسالة<textarea dir="rtl" rows={4} value={noticeMessage} maxLength={500} onChange={(event) => setNoticeMessage(event.target.value)} /></label><button className="button button-primary" type="button" disabled={busy || noticeTitle.trim().length < 2 || noticeMessage.trim().length < 2} onClick={() => void sendClientNotice()}>إرسال الإشعار</button></section></div>}</div>;
 }
 
+function MonthlyReportPanel() {
+  const [month, setMonth] = useState(todayInDamascus().slice(0, 7));
+  const [report, setReport] = useState<MonthlyTeamReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => { setBusy(true); setError(""); try { setReport(await api<MonthlyTeamReport>(`/api/admin/monthly-report?month=${month}`)); } catch (loadError) { setError((loadError as Error).message); } finally { setBusy(false); } }, [month]);
+  useEffect(() => { void load(); }, [load]);
+  const sessionTotal = report?.sessions.reduce((sum, item) => sum + Number(item.count), 0) ?? 0;
+  return <section className="content-card monthly-report-card">
+    <header className="section-header"><div><span className="eyebrow">Automatic monthly report</span><h2>Everything the team recorded</h2><p className="muted">Daily reports, client delivery, sessions, missing reports and deductions in one view.</p></div><label className="archive-month-field">Month<input type="month" value={month} max={todayInDamascus().slice(0,7)} onChange={(event) => setMonth(event.target.value)} /></label></header>
+    {error && <div className="form-error">{error}</div>}
+    {busy && !report ? <div className="empty-state compact"><strong>Building monthly report…</strong></div> : report && <>
+      <div className="monthly-report-metrics"><MetricCard label="Submitted reports" value={Number(report.totals?.reports ?? 0)} detail={month} tone="green" icon="check" /><MetricCard label="Completed tasks" value={Number(report.totals?.tasks ?? 0)} detail="From daily reports" tone="blue" icon="activity" /><MetricCard label="Produced" value={Number(report.totals?.produced ?? 0)} detail="Content units" tone="orange" icon="spark" /><MetricCard label="Sessions" value={sessionTotal} detail="All session statuses" tone="purple" icon="box" /></div>
+      <div className="monthly-report-columns"><div><h3>Team performance</h3><div className="monthly-report-list">{report.team.map((item) => <article key={item.id}><span className={`avatar avatar-${item.role}`}>{initials(item.displayName)}</span><div><strong>{item.displayName}</strong><small>{ROLE_LABELS[item.role]} · {item.tasks} tasks</small></div><span className="monthly-report-count">{item.submittedReports}<small>reports</small></span><span className={item.missingReports ? "monthly-report-missing" : ""}>{item.missingReports}<small>missing</small></span>{item.deductionCents > 0 && <em>-${Math.round(item.deductionCents / 100)}</em>}</article>)}</div></div><div><h3>Client delivery</h3><div className="monthly-client-grid">{report.clients.map((client) => <article key={client.id}><strong>{client.name}</strong><span>{client.produced} produced</span><span>{client.published} published</span><span>{client.drafts} drafts</span></article>)}</div></div></div>
+    </>}
+  </section>;
+}
+
 function MonthArchivePage({
   clients,
   archives,
@@ -3352,6 +3380,7 @@ function MonthArchivePage({
         title="Close the month without losing history"
         copy="Archive the month manually, keep a permanent snapshot, then start the live inventory at zero or carry selected scheduled content into the next month."
       />
+      <MonthlyReportPanel />
       <form className="content-card month-close-card" onSubmit={closeMonth}>
         <header className="section-header">
           <div>
@@ -3623,6 +3652,13 @@ function SessionsPage({
   );
   const [reelsShot, setReelsShot] = useState("");
   const [photosShot, setPhotosShot] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(todayInDamascus().slice(0, 7));
+  const sessionCells = monthCells(calendarMonth);
+  const sessionsByDay = new Map<string, SessionItem[]>();
+  for (const session of sessions) {
+    const key = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Damascus" }).format(new Date(session.scheduledAt));
+    sessionsByDay.set(key, [...(sessionsByDay.get(key) ?? []), session]);
+  }
 
   async function createSession(event: FormEvent) {
     event.preventDefault();
@@ -3705,7 +3741,12 @@ function SessionsPage({
         eyebrow="Session planner"
         title="Plan the next content moment"
         copy="Clients with low finished + shot reel coverage are flagged. A scheduled session stays active until someone manually completes, cancels, misses or deletes it."
+        action={<div className="calendar-month-controls"><button type="button" onClick={() => setCalendarMonth(shiftCalendarMonth(calendarMonth,-1))}>‹</button><input type="month" value={calendarMonth} onChange={(event) => setCalendarMonth(event.target.value)} /><button type="button" onClick={() => setCalendarMonth(shiftCalendarMonth(calendarMonth,1))}>›</button></div>}
       />
+      <section className="content-card session-calendar-board">
+        <header className="calendar-toolbar"><div><span className="eyebrow">Monthly planner</span><h2>{new Intl.DateTimeFormat("en-GB", { month:"long", year:"numeric", timeZone:"UTC" }).format(new Date(`${calendarMonth}-01T00:00:00Z`))}</h2></div><div className="calendar-legend"><span className="calendar-legend-ready"><i /> Scheduled</span><span className="calendar-legend-published"><i /> Completed</span><span className="calendar-legend-link_added"><i /> Cancelled / missed</span></div></header>
+        <div className="real-calendar-scroll"><div className="real-calendar session-real-calendar"><div className="calendar-weekdays">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((day) => <strong key={day}>{day}</strong>)}</div><div className="calendar-days">{sessionCells.map((cell) => <div className={`calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.key === todayInDamascus() ? "today" : ""}`} key={cell.key}><time>{cell.day}</time><div className="calendar-day-items">{(sessionsByDay.get(cell.key) ?? []).map((session) => <button type="button" className={`calendar-event session-calendar-event session-${session.status}`} key={session.id} onClick={() => document.getElementById(`session-${session.id}`)?.scrollIntoView({ behavior:"smooth", block:"center" })}><b>{session.clientName}</b><span>{new Intl.DateTimeFormat("en-GB", { hour:"2-digit", minute:"2-digit", timeZone:"Asia/Damascus" }).format(new Date(session.scheduledAt))} · {session.status}</span></button>)}</div></div>)}</div></div></div>
+      </section>
       <section className="split-layout">
         <div className="content-card">
           <header className="section-header">
@@ -3718,7 +3759,7 @@ function SessionsPage({
           <div className="session-list">
             {sessions.length ? (
               sessions.map((session) => (
-                <article className="session-row" key={session.id}>
+                <article className="session-row" id={`session-${session.id}`} key={session.id}>
                   <div className="session-date">
                     <strong>{new Intl.DateTimeFormat("en-GB", { day: "2-digit", timeZone: "Asia/Damascus" }).format(new Date(session.scheduledAt))}</strong>
                     <span>{new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "Asia/Damascus" }).format(new Date(session.scheduledAt))}</span>

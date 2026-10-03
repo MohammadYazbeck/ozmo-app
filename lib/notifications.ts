@@ -12,6 +12,7 @@ type NotificationKind =
   | "report_first_reminder"
   | "report_second_reminder"
   | "report_escalation"
+  | "report_penalty"
   | "inventory_low"
   | "session_needed"
   | "session_upcoming"
@@ -425,8 +426,42 @@ async function processReportNotifications(clock: DamascusClock) {
       messageAr: `عدد التقارير الناقصة: ${missing.length}. الموظفون: ${namesAr}.`,
       dedupeKey: `report:escalation:${clock.date}`,
     });
+    counts.escalations += await recordMissingReportsAndPenalties(missing, clock.date);
   }
   return counts;
+}
+
+async function recordMissingReportsAndPenalties(
+  missing: Array<{ userId: number; displayName: string }>,
+  reportDate: string,
+) {
+  const db = getD1();
+  let notifications = 0;
+  const start = await getSettingString("report_penalty_start_date", "");
+  if (!start) {
+    await db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES ('report_penalty_start_date',?)").bind(reportDate).run();
+  }
+  const effectiveStart = start || reportDate;
+  if (reportDate < effectiveStart) return 0;
+  const adminIds = await getActiveUserIds(["admin"]);
+  for (const user of missing) {
+    await db.prepare("INSERT OR IGNORE INTO missing_report_days (user_id,report_date) VALUES (?,?)").bind(user.userId, reportDate).run();
+    const row = await db.prepare("SELECT COUNT(*) AS count FROM missing_report_days WHERE user_id=? AND report_date>=?").bind(user.userId, effectiveStart).first<{ count: number }>();
+    const count = Number(row?.count ?? 0);
+    if (count === 0 || count % 5 !== 0) continue;
+    const inserted = await db.prepare("INSERT OR IGNORE INTO report_penalties (user_id,missing_count) VALUES (?,?)").bind(user.userId, count).run();
+    if (rowChanges(inserted) === 0) continue;
+    notifications += await enqueueNotification({
+      recipientUserIds: [user.userId, ...adminIds],
+      kind: "report_penalty",
+      titleEn: "$10 missing-report deduction",
+      titleAr: "حسم 10 دولار بسبب التقارير الناقصة",
+      messageEn: `${user.displayName} reached ${count} missing daily reports. A $10 deduction was recorded.`,
+      messageAr: `وصل ${user.displayName} إلى ${count} تقارير يومية ناقصة. تم تسجيل حسم بقيمة 10 دولار.`,
+      dedupeKey: `report:penalty:${user.userId}:${count}`,
+    });
+  }
+  return notifications;
 }
 
 type AlertState = {

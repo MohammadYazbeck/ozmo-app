@@ -216,6 +216,22 @@ async function initializeDatabase(): Promise<void> {
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS missing_report_days (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_date TEXT NOT NULL,
+      recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id,report_date)
+    )`,
+    `CREATE TABLE IF NOT EXISTS report_penalties (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      missing_count INTEGER NOT NULL CHECK (missing_count > 0 AND missing_count % 5 = 0),
+      amount_cents INTEGER NOT NULL DEFAULT 1000 CHECK (amount_cents > 0),
+      currency TEXT NOT NULL DEFAULT 'USD',
+      reason TEXT NOT NULL DEFAULT 'Five missing daily reports',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id,missing_count)
+    )`,
     `CREATE TABLE IF NOT EXISTS notification_states (
       key TEXT PRIMARY KEY,
       active INTEGER NOT NULL DEFAULT 0,
@@ -398,6 +414,8 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS notifications_dedupe_idx ON notifications(dedupe_key)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_recipient_dedupe ON notifications(recipient_user_id,dedupe_key)",
     "CREATE INDEX IF NOT EXISTS notifications_due_idx ON notifications(due_at,status)",
+    "CREATE INDEX IF NOT EXISTS missing_report_days_date_idx ON missing_report_days(report_date)",
+    "CREATE INDEX IF NOT EXISTS report_penalties_user_created_idx ON report_penalties(user_id,created_at)",
     "CREATE INDEX IF NOT EXISTS push_subscriptions_user_active_idx ON push_subscriptions(user_id,is_active)",
     "CREATE INDEX IF NOT EXISTS user_work_schedules_updated_idx ON user_work_schedules(updated_at)",
     "CREATE INDEX IF NOT EXISTS activity_log_hides_actor_idx ON activity_log_hides(hidden_by_user_id)",
