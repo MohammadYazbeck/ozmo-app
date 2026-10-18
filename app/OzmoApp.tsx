@@ -1898,6 +1898,17 @@ function MetricCard({
   );
 }
 
+function AdminDashboardLoading() {
+  return (
+    <div className="page-stack admin-dashboard dashboard-loading" aria-label="Loading admin dashboard">
+      <section className="dashboard-loading-heading"><span /><span /><i /></section>
+      <section className="dashboard-loading-metrics">{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</section>
+      <section className="dashboard-loading-columns"><span /><span /></section>
+      <section className="dashboard-loading-wide" />
+    </div>
+  );
+}
+
 function AdminDashboard({
   data,
   onNavigate,
@@ -1907,10 +1918,14 @@ function AdminDashboard({
   onNavigate: (section: AppSection) => void;
   onRefresh: () => Promise<void>;
 }) {
+  const [reportFilter, setReportFilter] = useState<"all" | "attention" | "submitted">("all");
   const maxChart = Math.max(
     1,
     ...data.weeklyProduction.flatMap((item) => [item.produced, item.published]),
   );
+  const weeklyProduced = data.weeklyProduction.reduce((total, item) => total + item.produced, 0);
+  const weeklyPublished = data.weeklyProduction.reduce((total, item) => total + item.published, 0);
+  const hasProductionData = weeklyProduced > 0 || weeklyPublished > 0;
   const sessionClients = data.clients.filter((client) => client.needsSession);
   const lowInventory = data.clients
     .filter(
@@ -1920,6 +1935,18 @@ function AdminDashboard({
         (client.draftThreshold != null && client.draftCount <= client.draftThreshold),
     )
     .slice(0, 7);
+  const dashboardDate = todayInDamascus();
+  const reportRows = [
+    ...data.reportStatuses.map((item) => ({ ...item, isOff: false })),
+    ...(data.offToday ?? []).map((item) => ({ ...item, status: "off" as const, isOff: true })),
+  ];
+  const visibleReportRows = reportRows.filter((item) =>
+    reportFilter === "all"
+      ? true
+      : reportFilter === "submitted"
+        ? item.status === "submitted"
+        : item.status === "missing" || item.status === "draft",
+  );
 
   async function markPaid(client: Client) {
     if (client.remainingPaymentCents <= 0) return;
@@ -1936,7 +1963,7 @@ function AdminDashboard({
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack admin-dashboard">
       <section className="dashboard-welcome">
         <div>
           <span className="eyebrow">
@@ -1953,9 +1980,18 @@ function AdminDashboard({
               : ""}
           </p>
         </div>
-        <button className="button button-primary" onClick={() => onNavigate("inventory")}>
-          <Icon name="edit" size={17} /> Adjust inventory
-        </button>
+        <div className="dashboard-welcome-actions">
+          <div className="dashboard-context" aria-label={`Dashboard date ${dashboardDate}`}>
+            <span className="dashboard-context-icon"><Icon name="calendar" size={16} /></span>
+            <span>
+              <small>Today</small>
+              <time dateTime={dashboardDate}>{formatDate(dashboardDate)}</time>
+            </span>
+          </div>
+          <button className="button button-primary" onClick={() => onNavigate("inventory")}>
+            <Icon name="edit" size={17} /> Adjust inventory
+          </button>
+        </div>
       </section>
 
       <section className="metric-grid">
@@ -2005,13 +2041,27 @@ function AdminDashboard({
               <span className="eyebrow">Daily reports</span>
               <h2>Team check-in</h2>
             </div>
-            <span className="completion-pill">{data.completionRate}%</span>
+            <div className="team-checkin-tools">
+              <span className="completion-pill">{data.completionRate}%</span>
+              <div className="dashboard-filter" aria-label="Filter team reports">
+                {(["all", "attention", "submitted"] as const).map((filter) => (
+                  <button
+                    type="button"
+                    key={filter}
+                    className={reportFilter === filter ? "active" : ""}
+                    onClick={() => setReportFilter(filter)}
+                  >
+                    {filter === "all" ? "All" : filter === "attention" ? "Needs attention" : "Submitted"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </header>
           <div className="progress-track">
             <span style={{ width: `${data.completionRate}%` }} />
           </div>
           <div className="team-status-list">
-            {data.reportStatuses.map((item) => (
+            {visibleReportRows.map((item) => (
               <div className="team-status-row" key={item.userId}>
                 <span className={`avatar avatar-${item.role}`}>{initials(item.displayName)}</span>
                 <div>
@@ -2019,7 +2069,9 @@ function AdminDashboard({
                   <small>{ROLE_LABELS[item.role]}</small>
                 </div>
                 <span className={`status-chip status-${item.status}`}>
-                  {item.status === "submitted"
+                  {item.status === "off"
+                    ? "Off today"
+                    : item.status === "submitted"
                     ? `Submitted ${item.submittedAt ? formatDate(item.submittedAt, true).split(",").pop() : ""}`
                     : item.status === "draft"
                       ? "Draft saved"
@@ -2027,18 +2079,7 @@ function AdminDashboard({
                 </span>
               </div>
             ))}
-            {data.offToday?.map((item) => (
-              <div className="team-status-row" key={`off-${item.userId}`}>
-                <span className={`avatar avatar-${item.role}`}>
-                  {initials(item.displayName)}
-                </span>
-                <div>
-                  <strong>{item.displayName}</strong>
-                  <small>{ROLE_LABELS[item.role]}</small>
-                </div>
-                <span className="status-chip status-off">Off today</span>
-              </div>
-            ))}
+            {!visibleReportRows.length && <div className="dashboard-filter-empty">No team members match this filter.</div>}
           </div>
         </article>
 
@@ -2052,10 +2093,15 @@ function AdminDashboard({
               <span><i className="legend-produced" /> Produced</span>
               <span><i className="legend-published" /> Published</span>
             </div>
+            <div className="chart-summary" aria-label="Seven day totals">
+              <span><strong>{weeklyProduced}</strong><small>produced</small></span>
+              <span><strong>{weeklyPublished}</strong><small>published</small></span>
+            </div>
           </header>
-          <div className="bar-chart">
+          {hasProductionData ? <div className="bar-chart">
             {data.weeklyProduction.map((item) => (
               <div className="bar-group" key={item.label}>
+                <div className="bar-values" aria-hidden="true"><small>{item.produced}</small><small>{item.published}</small></div>
                 <div className="bars">
                   <span
                     className="bar produced"
@@ -2071,7 +2117,7 @@ function AdminDashboard({
                 <small>{item.label}</small>
               </div>
             ))}
-          </div>
+          </div> : <div className="dashboard-empty-state chart-empty-state"><span className="empty-icon"><Icon name="activity" /></span><strong>No production recorded yet</strong><p>Produced and published activity will appear here as reports are submitted.</p></div>}
         </article>
       </section>
 
@@ -2380,12 +2426,12 @@ function InventoryPage({
               <thead>
                 <tr>
                   <th>Client</th>
-                  {!reelsOnly && <th>Drafts</th>}
                   <th>Shot reels</th>
                   <th>Finished reels</th>
                   {!reelsOnly && <th>Posts</th>}
                   {!reelsOnly && <th>Stories</th>}
                   <th>Session status</th>
+                  <th>Drive</th>
                 </tr>
               </thead>
               <tbody>
@@ -2397,13 +2443,6 @@ function InventoryPage({
                         <strong>{client.name}</strong>
                       </span>
                     </td>
-                    {!reelsOnly && (
-                      <td data-label="Drafts">
-                        <span className="inventory-number">
-                          {client.draftCount}
-                        </span>
-                      </td>
-                    )}
                     <td data-label="Shot reels">
                       <span className="inventory-number">
                         {client.shotReelCount}
@@ -2428,6 +2467,13 @@ function InventoryPage({
                       <span className={`status-chip ${client.needsSession ? "status-missing" : "status-submitted"}`}>
                         {client.needsSession ? "Session needed" : "Healthy"}
                       </span>
+                    </td>
+                    <td data-label="Drive">
+                      {client.googleDriveUrl ? (
+                        <a className="client-drive-link" href={client.googleDriveUrl} target="_blank" rel="noreferrer">
+                          Open folder <Icon name="arrow" size={14} />
+                        </a>
+                      ) : <span className="client-drive-empty">—</span>}
                     </td>
                   </tr>
                 ))}
@@ -2855,7 +2901,7 @@ function ClientsPage({
   }
 
   return (
-    <div className="page-stack">
+    <div className={`page-stack clients-page ${editOpen ? "is-editing" : ""}`}>
       <PageHeading
         eyebrow="Client hub"
         title="Every client, one clear story"
@@ -2999,7 +3045,20 @@ function ClientsPage({
             </div>
           </section>
           {editOpen && (
-            <form className="content-card add-client-card" onSubmit={saveClient}>
+            <div className="client-edit-heading">
+              <div>
+                <span className="eyebrow">Client settings</span>
+                <h2>Edit {client.name}</h2>
+                <p>Manage the client profile, branding, and portal access from one organized workspace.</p>
+              </div>
+              <button type="button" className="button button-secondary" onClick={() => setEditOpen(false)} disabled={busy}>
+                <Icon name="arrow" size={16} /> Back to client overview
+              </button>
+            </div>
+          )}
+          <div className={`client-secondary-grid ${editOpen ? "client-edit-page" : ""}`}>
+          {editOpen && (
+            <form className="content-card add-client-card client-editable-card" onSubmit={saveClient}>
               <div>
                 <span className="eyebrow">Client settings</span>
                 <h2>Edit client</h2>
@@ -3013,7 +3072,7 @@ function ClientsPage({
               <button className="button button-primary" disabled={busy || editName.trim().length < 2}>{busy ? "Saving…" : "Save client changes"}</button>
             </form>
           )}
-          <form className="content-card client-logo-card" onSubmit={uploadClientLogo}>
+          <form className="content-card client-logo-card client-editable-card" onSubmit={uploadClientLogo}>
             <div className="client-logo-copy">
               <span className="eyebrow">Client branding</span>
               <h2>Portal logo</h2>
@@ -3044,14 +3103,14 @@ function ClientsPage({
               )}
             </div>
           </form>
-          <section className="content-card client-brief-card">
+          <section className="content-card client-brief-card client-edit-hidden">
             <header className="section-header">
               <div><span className="eyebrow">Team reference</span><h2>Client brief</h2></div>
               <span className="status-chip status-submitted">{client.clientBrief?.trim() ? "Available" : "Not added"}</span>
             </header>
             {client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet. Admins can add one from Edit client.</p>}
           </section>
-          <form className="content-card add-client-card" onSubmit={savePortalAccess}>
+          <form className="content-card add-client-card portal-access-card client-editable-card" onSubmit={savePortalAccess}>
             <div>
               <span className="eyebrow">Client portal</span>
               <h2>{portalAccount ? "Reset portal access" : "Create portal access"}</h2>
@@ -3086,8 +3145,8 @@ function ClientsPage({
               {portalBusy ? "Saving…" : portalAccount ? "Reset password & save" : "Create portal account"}
             </button>
           </form>
-          <section className="content-card add-client-card"><div><span className="eyebrow">Payment history</span><h2>Paid amounts</h2><p>Payments recorded when the balance was marked paid.</p></div><PaymentHistory payments={payments} /></section>
-          <section className="content-card client-kpi-card">
+          <section className="content-card add-client-card client-edit-hidden"><div><span className="eyebrow">Payment history</span><h2>Paid amounts</h2><p>Payments recorded when the balance was marked paid.</p></div><PaymentHistory payments={payments} /></section>
+          <section className="content-card client-kpi-card client-editable-card">
             <header className="section-header client-kpi-header">
               <div>
                 <span className="eyebrow">Monthly goals</span>
@@ -3153,7 +3212,7 @@ function ClientsPage({
               )}
             </div>
           </section>
-          <section className="content-card">
+          <section className="content-card client-history-card client-edit-hidden">
             <header className="section-header">
               <div>
                 <span className="eyebrow">Dated log</span>
@@ -3162,6 +3221,7 @@ function ClientsPage({
             </header>
             <ActivityList items={clientHistory} />
           </section>
+          </div>
         </>
       )}
     </div>
@@ -3181,7 +3241,7 @@ function ClientBriefPage({ clients }: { clients: Client[] }) {
       <div className="client-tabs">
         {clients.map((item) => <button key={item.id} className={item.id === client?.id ? "active" : ""} onClick={() => setSelected(item.id)}>{item.name}</button>)}
       </div>
-      {client ? <><section className="content-card client-brief-card"><header className="section-header"><div><span className="eyebrow">{client.ozmoClientId}</span><h2>{client.name}</h2></div><span className="status-chip status-submitted">Team reference</span></header>{client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet.</p>}</section><section className="content-card"><header className="section-header"><div><span className="eyebrow">Client activity</span><h2>History</h2></div><button className="button button-secondary" type="button" onClick={() => setHistoryOpen((value) => !value)}>{historyOpen ? "Collapse history" : `Expand history (${clientHistory.length})`}</button></header>{historyOpen && <ActivityList items={clientHistory} />}</section></> : <div className="content-card empty-state"><strong>No active clients</strong><p>Client briefs will appear here when clients are added.</p></div>}
+      {client ? <><section className="content-card client-brief-card"><header className="section-header"><div><span className="eyebrow">{client.ozmoClientId}</span><h2>{client.name}</h2></div><span className="status-chip status-submitted">Team reference</span></header>{client.clientBrief?.trim() ? <p className="client-brief-copy">{client.clientBrief}</p> : <p className="muted">No client brief has been added yet.</p>}{client.googleDriveUrl && <a className="client-brief-drive" href={client.googleDriveUrl} target="_blank" rel="noreferrer"><span><Icon name="box" size={18} /></span><div><strong>Google Drive folder</strong><small>Open files and shared client assets</small></div><Icon name="arrow" size={16} /></a>}</section><section className="content-card"><header className="section-header"><div><span className="eyebrow">Client activity</span><h2>History</h2></div><button className="button button-secondary" type="button" onClick={() => setHistoryOpen((value) => !value)}>{historyOpen ? "Collapse history" : `Expand history (${clientHistory.length})`}</button></header>{historyOpen && <ActivityList items={clientHistory} />}</section></> : <div className="content-card empty-state"><strong>No active clients</strong><p>Client briefs will appear here when clients are added.</p></div>}
     </div>
   );
 }
@@ -3214,6 +3274,10 @@ function MiniCalendarCard({ onOpen }: { onOpen: () => void }) {
   const byDate = new Map<string, CalendarItem[]>();
   items.forEach((item) => byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]));
   const cells = monthCells(month);
+  const upcoming = items
+    .filter((item) => item.date >= todayInDamascus())
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(0, 4);
   return (
     <article className="content-card mini-calendar-card">
       <header className="section-header">
@@ -3221,13 +3285,19 @@ function MiniCalendarCard({ onOpen }: { onOpen: () => void }) {
         <button className="text-button" type="button" onClick={onOpen}>Open calendar <Icon name="arrow" size={15} /></button>
       </header>
       {loaded && !items.length ? <div className="mini-calendar-empty">No scheduled posts or reels this month.</div> : (
-        <div className="mini-calendar-grid" aria-label="Mini content calendar">
-          {WEEKDAYS_AR.map((day) => <strong key={day}>{day.slice(0, 2)}</strong>)}
-          {cells.map((cell) => {
-            const dayItems = byDate.get(cell.key) ?? [];
-            const status = dayItems.some((item) => item.status === "published") ? "published" : dayItems.some((item) => item.status === "link_added" || item.status === "viewed") ? "link_added" : dayItems.some((item) => item.status === "ready") ? "ready" : dayItems.length ? "planned" : "";
-            return <button type="button" className={`mini-calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.key === todayInDamascus() ? "today" : ""}`} key={cell.key} onClick={onOpen}><span>{cell.day}</span>{dayItems.length > 0 && <i className={`mini-calendar-dot ${status}`} title={`${dayItems.length} items`} />}</button>;
-          })}
+        <div className="mini-calendar-layout">
+          <div className="mini-calendar-grid" aria-label="Mini content calendar">
+            {WEEKDAYS_AR.map((day) => <strong key={day}>{day.slice(0, 2)}</strong>)}
+            {cells.map((cell) => {
+              const dayItems = byDate.get(cell.key) ?? [];
+              const status = dayItems.some((item) => item.status === "published") ? "published" : dayItems.some((item) => item.status === "link_added" || item.status === "viewed") ? "link_added" : dayItems.some((item) => item.status === "ready") ? "ready" : dayItems.length ? "planned" : "";
+              return <button type="button" className={`mini-calendar-day ${!cell.inMonth ? "outside" : ""} ${cell.key === todayInDamascus() ? "today" : ""}`} key={cell.key} onClick={onOpen}><span>{cell.day}</span>{dayItems.length > 0 && <i className={`mini-calendar-dot ${status}`} title={`${dayItems.length} items`} />}</button>;
+            })}
+          </div>
+          <aside className="mini-calendar-upcoming">
+            <header><span className="eyebrow">Next up</span><strong>{upcoming.length ? `${upcoming.length} scheduled` : "No upcoming items"}</strong></header>
+            {upcoming.length ? upcoming.map((item) => <button type="button" key={item.id} onClick={onOpen}><time>{formatDate(item.date)}</time><span><b>{item.contentType === "reel" ? "Reel" : "Post"}</b><small>{item.clientName}</small></span><i className={`mini-calendar-dot ${item.status}`} /></button>) : <p>New scheduled content will appear here.</p>}
+          </aside>
         </div>
       )}
     </article>
@@ -6246,6 +6316,9 @@ export default function OzmoApp() {
     if (user.role === "admin") {
       if (section === "home" && dashboard) {
         return <AdminDashboard data={dashboard} onNavigate={setSection} onRefresh={loadData} />;
+      }
+      if (section === "home") {
+        return <AdminDashboardLoading />;
       }
       if (section === "reports") {
         return <AdminReportsPage clients={clients} />;

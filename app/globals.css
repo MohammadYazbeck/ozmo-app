@@ -5286,3 +5286,835 @@ textarea:focus {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Final staff workspace overrides. */
+.clients-page .client-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+
+.clients-page .client-secondary-grid > .content-card {
+  min-width: 0;
+  height: 100%;
+  padding: 20px;
+}
+
+.clients-page .client-secondary-grid > .client-kpi-card,
+.clients-page .client-secondary-grid > .client-logo-card,
+.clients-page .client-secondary-grid > .client-history-card {
+  grid-column: 1 / -1;
+}
+
+.clients-page .client-hero-card {
+  padding: 24px 26px;
+}
+
+.clients-page .client-stock {
+  gap: 8px;
+}
+
+.clients-page .client-stock > div {
+  min-width: 70px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.sidebar {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  overscroll-behavior: contain;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.36);
+}
+
+@media (max-width: 900px) {
+  .clients-page .client-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clients-page .client-secondary-grid > .client-kpi-card,
+  .clients-page .client-secondary-grid > .client-logo-card,
+  .clients-page .client-secondary-grid > .client-history-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .clients-page .client-hero-card {
+    padding: 19px;
+  }
+
+  .clients-page .client-secondary-grid {
+    gap: 12px;
+  }
+
+  .clients-page .client-secondary-grid > .content-card {
+    padding: 17px;
+  }
+}
+
+/* Keep the portal-access form inside its client workspace column. */
+.clients-page .portal-access-card {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.clients-page .portal-access-card > div:first-child {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.clients-page .portal-access-card > label,
+.clients-page .portal-access-card input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.clients-page .portal-access-card > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.clients-page .portal-account-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .clients-page .portal-access-card {
+    grid-template-columns: 1fr;
+  }
+
+  .clients-page .portal-access-card > div:first-child,
+  .clients-page .portal-access-card > button {
+    grid-column: auto;
+  }
+}
+
+/* Dedicated client editing workspace. */
+.client-edit-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 4px 2px 0;
+}
+
+.client-edit-heading h2 {
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: clamp(24px, 2.4vw, 32px);
+  letter-spacing: -0.045em;
+}
+
+.client-edit-heading p {
+  max-width: 620px;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.clients-page .client-edit-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.clients-page .client-edit-page > .client-edit-hidden {
+  display: none;
+}
+
+.clients-page:not(.is-editing) .client-editable-card {
+  display: none;
+}
+
+.clients-page .client-edit-page > .client-editable-card {
+  grid-column: 1;
+  width: 100%;
+}
+
+.clients-page .client-edit-page > .client-kpi-card {
+  grid-column: 1;
+}
+
+/* Admin dashboard context row. */
+.dashboard-welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashboard-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 7px 11px 7px 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+}
+
+.dashboard-context-icon {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  color: var(--orange);
+  background: var(--orange-soft);
+  border-radius: 9px;
+}
+
+.dashboard-context > span:not(.dashboard-context-icon):not(.dashboard-context-live-label) {
+  display: grid;
+  gap: 1px;
+}
+
+.dashboard-context small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-context time {
+  font-size: 12px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.dashboard-context-live {
+  width: 7px;
+  height: 7px;
+  margin-left: 3px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(20, 147, 97, 0.1);
+}
+
+.dashboard-context-live-label {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.team-checkin-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.dashboard-filter button {
+  min-height: 28px;
+  padding: 5px 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.dashboard-filter button:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.dashboard-filter button.active {
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-filter-empty {
+  padding: 24px 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.chart-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+.chart-summary > span {
+  display: grid !important;
+  min-width: 58px;
+  gap: 3px;
+}
+
+.chart-summary strong {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.chart-summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+/* The overview uses grouped surfaces rather than a wall of floating cards. */
+.admin-dashboard .content-card {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(211, 220, 231, 0.82);
+  border-radius: 11px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.028);
+}
+
+.admin-dashboard .metric-card {
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+}
+
+.admin-dashboard .metric-card:hover {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.075);
+}
+
+.admin-dashboard .dashboard-grid {
+  gap: 18px;
+}
+
+.admin-dashboard .section-header {
+  margin-bottom: 16px;
+}
+
+.admin-dashboard .submission-card,
+.admin-dashboard .chart-card,
+.admin-dashboard .mini-calendar-card {
+  border-top: 3px solid rgba(255, 100, 51, 0.18);
+}
+
+.admin-dashboard .submission-card {
+  border-top-color: rgba(40, 169, 119, 0.28);
+}
+
+.admin-dashboard .chart-card {
+  border-top-color: rgba(91, 109, 255, 0.24);
+}
+
+.admin-dashboard .mini-calendar-card {
+  border-top-color: rgba(255, 100, 51, 0.22);
+}
+
+.admin-dashboard .mini-calendar-day {
+  border-radius: 6px;
+}
+
+.admin-dashboard .dashboard-context,
+.admin-dashboard .dashboard-filter {
+  border-radius: 9px;
+}
+
+.admin-dashboard .dashboard-filter button {
+  border-radius: 6px;
+}
+
+.dashboard-loading {
+  pointer-events: none;
+}
+
+.dashboard-loading-heading,
+.dashboard-loading-metrics,
+.dashboard-loading-columns {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-loading-heading {
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1fr) 150px;
+  align-items: end;
+  min-height: 105px;
+}
+
+.dashboard-loading-heading span,
+.dashboard-loading-heading i,
+.dashboard-loading-metrics span,
+.dashboard-loading-columns span,
+.dashboard-loading-wide {
+  display: block;
+  background: linear-gradient(100deg, #e8edf2 20%, #f7f9fb 42%, #e8edf2 64%);
+  background-size: 220% 100%;
+  border-radius: 8px;
+  animation: dashboardShimmer 1.45s ease-in-out infinite;
+}
+
+.dashboard-loading-heading span:first-child {
+  height: 54px;
+}
+
+.dashboard-loading-heading span:nth-child(2) {
+  height: 36px;
+}
+
+.dashboard-loading-heading i {
+  height: 44px;
+}
+
+.dashboard-loading-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-loading-metrics span {
+  height: 112px;
+}
+
+.dashboard-loading-columns {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.dashboard-loading-columns span {
+  height: 350px;
+}
+
+.dashboard-loading-wide {
+  height: 215px;
+}
+
+@keyframes dashboardShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.dashboard-empty-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: 9px;
+  text-align: center;
+}
+
+.dashboard-empty-state strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.dashboard-empty-state p {
+  max-width: 300px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.chart-empty-state {
+  min-height: 285px;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-loading-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-loading-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .dashboard-loading-heading {
+    grid-template-columns: 1fr;
+    min-height: 150px;
+  }
+
+  .dashboard-loading-heading span:nth-child(2) {
+    width: 78%;
+  }
+
+  .dashboard-loading-heading i {
+    width: 48%;
+  }
+
+  .dashboard-loading-metrics {
+    gap: 8px;
+  }
+
+  .dashboard-loading-metrics span {
+    height: 104px;
+  }
+}
+
+@media (min-width: 1181px) {
+  .admin-dashboard {
+    gap: 26px;
+  }
+
+  .admin-dashboard .metric-grid {
+    gap: 16px;
+  }
+
+  .admin-dashboard .dashboard-grid {
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+    gap: 22px;
+  }
+
+  .admin-dashboard .dashboard-grid-lower {
+    grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  }
+
+  .admin-dashboard .content-card {
+    padding: 22px;
+  }
+}
+
+.admin-dashboard .mini-calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 0.42fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.mini-calendar-upcoming {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+.mini-calendar-upcoming > header {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 4px;
+}
+
+.mini-calendar-upcoming > header strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.mini-calendar-upcoming > button {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 7px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.mini-calendar-upcoming > button time {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.mini-calendar-upcoming > button span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.mini-calendar-upcoming > button b,
+.mini-calendar-upcoming > button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-calendar-upcoming > button b {
+  font-size: 11px;
+}
+
+.mini-calendar-upcoming > button small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.mini-calendar-upcoming > button .mini-calendar-dot {
+  position: static;
+  width: 7px;
+  height: 7px;
+}
+
+.mini-calendar-upcoming > p {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .admin-dashboard .mini-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-calendar-upcoming {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-dashboard {
+    gap: 12px;
+  }
+
+  .admin-dashboard .dashboard-welcome h1 {
+    font-size: 28px;
+  }
+
+  .admin-dashboard .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-dashboard .metric-card {
+    min-height: 112px;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 13px;
+    border-radius: 10px;
+  }
+
+  .admin-dashboard .metric-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .admin-dashboard .metric-card strong {
+    font-size: 23px;
+  }
+
+  .admin-dashboard .metric-card small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.35;
+  }
+
+  .admin-dashboard .content-card {
+    padding: 15px;
+    border-radius: 10px;
+  }
+
+  .admin-dashboard .team-status-row {
+    min-height: 47px;
+  }
+
+  .admin-dashboard .chart-card {
+    min-height: 0;
+  }
+
+  .admin-dashboard .bar-chart {
+    height: 210px;
+  }
+}
+
+.client-drive-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--orange-dark);
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.client-drive-link:hover {
+  color: var(--orange);
+  text-decoration: underline;
+}
+
+.client-drive-empty {
+  color: var(--muted);
+}
+
+.client-brief-drive {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  margin-top: 18px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.client-brief-drive:hover {
+  background: var(--orange-soft);
+  border-color: rgba(255, 100, 51, 0.32);
+}
+
+.client-brief-drive > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: var(--orange-dark);
+  background: white;
+  border-radius: 9px;
+}
+
+.client-brief-drive > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.client-brief-drive strong {
+  font-size: 12px;
+}
+
+.client-brief-drive small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-values {
+  display: flex;
+  width: 65%;
+  max-width: 42px;
+  justify-content: center;
+  gap: 4px;
+}
+
+.bar-values small {
+  width: 40%;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 8px;
+  font-weight: 800;
+  text-align: center;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 700px) {
+  .dashboard-welcome-actions {
+    width: 100%;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .dashboard-context,
+  .dashboard-welcome-actions > .button {
+    flex: 1 1 100%;
+  }
+
+  .dashboard-welcome-actions > .button {
+    justify-content: center;
+  }
+
+  .team-checkin-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .dashboard-filter {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .chart-summary {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+.clients-page .client-edit-page > .client-logo-card,
+.clients-page .client-edit-page > .portal-access-card {
+  grid-column: 1;
+}
+
+.clients-page .client-edit-page .add-client-card {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.clients-page .client-edit-page .add-client-card > div:first-child {
+  grid-column: 1 / -1;
+}
+
+.clients-page .client-edit-page .add-client-card > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 700px) {
+  .client-edit-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .client-edit-heading .button {
+    align-self: flex-start;
+  }
+
+  .clients-page .client-edit-page .add-client-card {
+    grid-template-columns: 1fr;
+  }
+
+  .clients-page .client-edit-page .add-client-card > div:first-child,
+  .clients-page .client-edit-page .add-client-card > button {
+    grid-column: auto;
+  }
+}
