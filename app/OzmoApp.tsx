@@ -21,6 +21,7 @@ import {
   showBrowserNotification,
 } from "./browserNotifications";
 import PaymentHistory, { type Payment } from "./PaymentHistory";
+import TicketsPage from "./TicketsPage";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -266,6 +267,7 @@ type AppSection =
   | "activity"
   | "settings"
   | "history"
+  | "tickets"
   | "help";
 
 type ActionOption = {
@@ -592,7 +594,8 @@ function Icon({
     | "eye"
     | "refresh"
     | "download"
-    | "send";
+    | "send"
+    | "ticket";
   size?: number;
 }) {
   const paths: Record<string, ReactNode> = {
@@ -612,6 +615,12 @@ function Icon({
       <>
         <rect x="3" y="4" width="18" height="16" rx="3" />
         <path d="M7 9h10M7 13h6M7 17h4" />
+      </>
+    ),
+    ticket: (
+      <>
+        <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-4 2-4-2-3 2V6a2 2 0 0 1 2-2Z" />
+        <path d="M9 9h6M9 13h4" />
       </>
     ),
     calendar: (
@@ -5935,32 +5944,83 @@ function AppShell({
   const [mobileNav, setMobileNav] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isAdmin = user.role === "admin";
-  const nav = isAdmin
+  const clientGroupStorageKey = `ozmo-sidebar-client-${isAdmin ? "admin" : "staff"}`;
+  const [clientNavOpen, setClientNavOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(clientGroupStorageKey);
+    return stored == null ? true : stored === "true";
+  });
+  type NavItem = [AppSection, string, Parameters<typeof Icon>[0]["name"]];
+  const primaryNav: NavItem[] = isAdmin
     ? [
         ["home", "Overview", "home"],
         ["reports", "Reports", "activity"],
-        ["inventory", "Inventory", "box"],
+        ["tickets", "Tickets", "ticket"],
+      ]
+    : [
+        ["home", "Today’s report", "home"],
+        ["history", "My history", "history"],
+        ["tickets", "My tickets", "ticket"],
+      ];
+  const clientNav: NavItem[] = isAdmin
+    ? [
         ["clients", "Clients", "clients"],
+        ["inventory", "Inventory", "box"],
         ["calendar", "Content calendar", "calendar"],
         ["sessions", "Sessions", "calendar"],
+      ]
+    : [
+        ["clients", "Client briefs", "clients"],
+        ["inventory", "Inventory", "box"],
+        ...(user.role === "account_manager" || user.role === "editor" || user.role === "content_manager"
+          ? ([["sessions", "Sessions", "calendar"]] as NavItem[])
+          : []),
+        ["calendar", "Content calendar", "calendar"],
+      ];
+  const managementNav: NavItem[] = isAdmin
+    ? [
         ["archive", "Month archive", "history"],
         ["team", "Team", "team"],
         ["activity", "Activity log", "activity"],
         ["settings", "Settings", "settings"],
       ]
     : [
-        ["home", "Today’s report", "home"],
-        ["inventory", "Inventory", "box"],
-        ["history", "My history", "history"],
-        ...(user.role === "account_manager" || user.role === "editor" || user.role === "content_manager"
-          ? ([["sessions", "Sessions", "calendar"]] as string[][])
-          : []),
-        ["clients", "Client briefs", "clients"],
-        ["calendar", "Content calendar", "calendar"],
         ["settings", "Notifications", "settings"],
         ["help", "Help & rules", "help"],
       ];
+  const clientSectionActive = clientNav.some(([value]) => value === section);
   const unread = notifications.filter((item) => !item.read).length;
+
+  useEffect(() => {
+    if (!clientSectionActive) return;
+    setClientNavOpen(true);
+    window.localStorage.setItem(clientGroupStorageKey, "true");
+  }, [clientGroupStorageKey, clientSectionActive]);
+
+  function toggleClientNav() {
+    setClientNavOpen((open) => {
+      const next = !open;
+      window.localStorage.setItem(clientGroupStorageKey, String(next));
+      return next;
+    });
+  }
+
+  function renderNavItem([value, label, icon]: NavItem, nested = false) {
+    return (
+      <button
+        key={value}
+        className={`${section === value ? "active" : ""} ${nested ? "nav-subitem" : ""}`}
+        onClick={() => {
+          onSection(value);
+          setMobileNav(false);
+        }}
+      >
+        <Icon name={icon} />
+        <span>{label}</span>
+        {section === value && <i />}
+      </button>
+    );
+  }
 
   async function refreshWorkspace() {
     setRefreshing(true);
@@ -5985,21 +6045,23 @@ function AppShell({
           </button>
         </div>
         <nav>
-          <span className="nav-label">{isAdmin ? "Management" : "Workspace"}</span>
-          {nav.map(([value, label, icon]) => (
-            <button
-              key={value}
-              className={section === value ? "active" : ""}
-              onClick={() => {
-                onSection(value as AppSection);
-                setMobileNav(false);
-              }}
-            >
-              <Icon name={icon as Parameters<typeof Icon>[0]["name"]} />
-              <span>{label}</span>
-              {section === value && <i />}
-            </button>
-          ))}
+          <span className="nav-label">Workspace</span>
+          {primaryNav.map((item) => renderNavItem(item))}
+          <button
+            type="button"
+            className={`nav-group-toggle ${clientSectionActive ? "group-active" : ""}`}
+            aria-expanded={clientNavOpen}
+            onClick={toggleClientNav}
+          >
+            <Icon name="clients" />
+            <span>Client operations</span>
+            <span className={`nav-chevron ${clientNavOpen ? "open" : ""}`}>⌄</span>
+          </button>
+          <div className={`nav-submenu ${clientNavOpen ? "open" : ""}`}>
+            {clientNav.map((item) => renderNavItem(item, true))}
+          </div>
+          <span className="nav-label nav-label-secondary">{isAdmin ? "Management" : "Account"}</span>
+          {managementNav.map((item) => renderNavItem(item))}
           <a
             className="nav-external-link"
             href="https://docs.google.com/spreadsheets/d/1Bcivdx5MF3z3nxoMyg5rhGOx1Z1oE2mnB_7UASNdB7U/edit?usp=sharing"
@@ -6011,13 +6073,6 @@ function AppShell({
             <Icon name="arrow" size={14} />
           </a>
         </nav>
-        <div className="sidebar-office">
-          <span className="office-pulse" />
-          <div>
-            <strong>Office network</strong>
-            <small>Private access active</small>
-          </div>
-        </div>
         <div className="sidebar-user">
           <span className={`avatar avatar-${user.role}`}>{initials(user.displayName)}</span>
           <div>
@@ -6313,6 +6368,9 @@ export default function OzmoApp() {
 
   const page = useMemo(() => {
     if (!user) return null;
+    if (section === "tickets") {
+      return <TicketsPage currentUser={user} users={users} clients={clients} />;
+    }
     if (user.role === "admin") {
       if (section === "home" && dashboard) {
         return <AdminDashboard data={dashboard} onNavigate={setSection} onRefresh={loadData} />;

@@ -23,7 +23,12 @@ type NotificationKind =
   | "manager_weekly_summary"
   | "content_unavailable"
   | "browser_push_test"
-  | "manual_team_message";
+  | "manual_team_message"
+  | "ticket_assigned"
+  | "ticket_updated"
+  | "ticket_completed"
+  | "ticket_due_soon"
+  | "ticket_overdue";
 
 type NotificationInput = {
   recipientUserIds: number[];
@@ -77,6 +82,7 @@ type TickCounts = {
   inventoryAlerts: number;
   sessionAlerts: number;
   summaries: number;
+  ticketAlerts: number;
   sessionsMarkedMissed: number;
 };
 
@@ -964,14 +970,45 @@ export async function runNotificationTick(date = new Date()): Promise<TickCounts
   const inventoryAlerts = await processInventoryAlerts();
   const sessions = await processSessionAlerts(date, clock);
   const summaries = await processManagerSummaries(clock);
+  const ticketAlerts = await processTicketDeadlineAlerts(date);
   return {
     reportReminders: reports.reminders,
     reportEscalations: reports.escalations,
     inventoryAlerts,
     sessionAlerts: sessions.alerts,
     summaries,
+    ticketAlerts,
     sessionsMarkedMissed: sessions.markedMissed,
   };
+}
+
+async function processTicketDeadlineAlerts(date: Date) {
+  const now = date.toISOString();
+  const upcoming = new Date(date.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const rows = await getD1().prepare(
+    `SELECT id,title,assigned_user_id AS assignedUserId,due_at AS dueAt
+     FROM tickets
+     WHERE deleted_at IS NULL AND status <> 'completed' AND due_at IS NOT NULL AND due_at <= ?`,
+  ).bind(upcoming).all<{ id: number; title: string; assignedUserId: number; dueAt: string }>();
+  let inserted = 0;
+  for (const ticket of rows.results) {
+    const overdue = ticket.dueAt < now;
+    inserted += await enqueueNotification({
+      recipientUserIds: [Number(ticket.assignedUserId)],
+      kind: overdue ? "ticket_overdue" : "ticket_due_soon",
+      titleEn: overdue ? "Ticket overdue" : "Ticket due soon",
+      titleAr: overdue ? "تذكرة متأخرة" : "موعد التذكرة قريب",
+      messageEn: overdue
+        ? `${ticket.title} is past its deadline.`
+        : `${ticket.title} is due within the next 24 hours.`,
+      messageAr: overdue
+        ? `تجاوزت ${ticket.title} الموعد النهائي.`
+        : `موعد ${ticket.title} خلال الـ 24 ساعة القادمة.`,
+      dedupeKey: `ticket:${ticket.id}:${overdue ? "overdue" : "due-soon"}:${ticket.dueAt}`,
+      dueAt: ticket.dueAt,
+    });
+  }
+  return inserted;
 }
 
 export async function auditSessionChange(input: {

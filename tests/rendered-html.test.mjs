@@ -479,3 +479,27 @@ test("isolates the Windows 192.168.1.211 HTTPS profile from the default host", (
     /must contain only lowercase/,
   );
 });
+
+test("ships role-aware tickets with optional checkpoints and manual status", async () => {
+  const [database, route, page, app] = await Promise.all([
+    readFile(new URL("../lib/db.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/tickets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/TicketsPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/OzmoApp.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(database, /CREATE TABLE IF NOT EXISTS tickets/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_checkpoints/);
+  assert.match(database, /deleted_at TEXT/);
+  assert.match(route, /requireAdmin\(request\)/);
+  assert.match(route, /isAssignee/);
+  assert.match(route, /action === "status"/);
+  assert.match(route, /action === "toggle_checkpoint"/);
+  assert.doesNotMatch(
+    route,
+    /toggle_checkpoint[\s\S]{0,1800}UPDATE tickets SET status/,
+  );
+  assert.match(page, /they never change ticket status/i);
+  assert.match(page, /changed manually/i);
+  assert.match(app, /\["tickets", "My tickets", "ticket"\]/);
+});

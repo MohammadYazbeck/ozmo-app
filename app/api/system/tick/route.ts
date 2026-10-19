@@ -83,6 +83,7 @@ export async function POST(request: Request) {
           inventoryAlerts: 0,
           sessionAlerts: 0,
           summaries: 0,
+          ticketAlerts: 0,
           sessionsMarkedMissed: 0,
         },
       });
