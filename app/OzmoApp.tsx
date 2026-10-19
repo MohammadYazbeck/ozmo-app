@@ -5960,7 +5960,7 @@ function AppShell({
     : [
         ["home", "Today’s report", "home"],
         ["history", "My history", "history"],
-        ["tickets", "My tickets", "ticket"],
+        ["tickets", user.role === "account_manager" ? "Tickets" : "My tickets", "ticket"],
       ];
   const clientNav: NavItem[] = isAdmin
     ? [

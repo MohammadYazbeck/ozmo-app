@@ -4714,6 +4714,16 @@ textarea:focus {
 .ticket-form label small, .ticket-checkpoint-builder legend small { color: var(--muted); font-weight: 500; }
 .ticket-form input, .ticket-form textarea, .ticket-form select { width: 100%; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-weight: 500; resize: vertical; }
 .ticket-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ticket-assignee-picker { min-width: 0; max-height: 230px; margin: 0 0 15px; padding: 10px; overflow-y: auto; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-soft); }
+.ticket-assignee-picker legend { padding: 0 5px; color: var(--ink-soft); font-size: 12px; font-weight: 800; }
+.ticket-assignee-picker legend small { color: var(--muted); font-weight: 500; }
+.ticket-assignee-picker > label { display: flex; align-items: center; gap: 9px; margin: 3px 0; padding: 8px 9px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.ticket-assignee-picker > label:hover { background: var(--surface); }
+.ticket-assignee-picker > label.selected { border-color: rgba(255,90,10,.23); background: var(--orange-soft); }
+.ticket-assignee-picker input { flex: 0 0 auto; width: 17px; height: 17px; padding: 0; accent-color: var(--orange); }
+.ticket-assignee-picker label > span { display: grid; gap: 1px; font-size: 12px; font-weight: 800; }
+.ticket-assignee-picker label small { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: capitalize; }
+.ticket-assignee-picker > em { display: block; padding: 6px 8px 1px; color: var(--muted); font-size: 10px; font-style: normal; font-weight: 750; text-align: right; }
 .ticket-checkpoint-builder { margin: 4px 0 18px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
 .ticket-checkpoint-builder legend { padding: 0 5px; font-weight: 800; }
 .ticket-checkpoint-builder > p { margin-bottom: 10px; color: var(--muted); font-size: 12px; }

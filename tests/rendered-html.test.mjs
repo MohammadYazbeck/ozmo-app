@@ -490,10 +490,14 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
 
   assert.match(database, /CREATE TABLE IF NOT EXISTS tickets/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_checkpoints/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_assignees/);
+  assert.match(database, /INSERT OR IGNORE INTO ticket_assignees/);
   assert.match(database, /deleted_at TEXT/);
   assert.match(database, /ensureColumn\(database, "tickets", "assignment_url"/);
   assert.match(database, /ensureColumn\(database, "tickets", "completion_url"/);
-  assert.match(route, /requireAdmin\(request\)/);
+  assert.match(route, /creator\.role !== "admin" && creator\.role !== "account_manager"/);
+  assert.match(route, /ids\.length < 1 \|\| ids\.length > 2/);
+  assert.match(route, /EXISTS \(SELECT 1 FROM ticket_assignees/);
   assert.match(route, /isAssignee/);
   assert.match(route, /action === "status"/);
   assert.match(route, /action === "toggle_checkpoint"/);
@@ -509,5 +513,5 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(page, /changed manually/i);
   assert.match(page, /locked after creation/i);
   assert.match(page, /Update completed work/i);
-  assert.match(app, /\["tickets", "My tickets", "ticket"\]/);
+  assert.match(app, /user\.role === "account_manager" \? "Tickets" : "My tickets"/);
 });

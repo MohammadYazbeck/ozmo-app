@@ -423,6 +423,13 @@ async function initializeDatabase(): Promise<void> {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS ticket_assignees (
+      ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      assigned_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (ticket_id,user_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS ticket_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
@@ -466,6 +473,7 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS tickets_due_status_idx ON tickets(due_at,status,deleted_at)",
     "CREATE INDEX IF NOT EXISTS tickets_client_idx ON tickets(client_id,deleted_at)",
     "CREATE INDEX IF NOT EXISTS ticket_checkpoints_ticket_sort_idx ON ticket_checkpoints(ticket_id,sort_order,id)",
+    "CREATE INDEX IF NOT EXISTS ticket_assignees_user_idx ON ticket_assignees(user_id,ticket_id)",
     "CREATE INDEX IF NOT EXISTS ticket_events_ticket_date_idx ON ticket_events(ticket_id,created_at)",
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_user_idx ON portal_auth_sessions(portal_user_id)",
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_expiry_idx ON portal_auth_sessions(expires_at)",
@@ -510,6 +518,10 @@ async function initializeDatabase(): Promise<void> {
   await ensureColumn(database, "tickets", "completion_url", "TEXT");
   await ensureColumn(database, "tickets", "completion_url_added_at", "TEXT");
   await ensureColumn(database, "tickets", "completion_url_added_by_user_id", "INTEGER");
+  await database.prepare(
+    `INSERT OR IGNORE INTO ticket_assignees (ticket_id,user_id,assigned_by_user_id)
+     SELECT id,assigned_user_id,created_by_user_id FROM tickets`,
+  ).run();
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);
   await database

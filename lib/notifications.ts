@@ -986,9 +986,9 @@ async function processTicketDeadlineAlerts(date: Date) {
   const now = date.toISOString();
   const upcoming = new Date(date.getTime() + 24 * 60 * 60 * 1000).toISOString();
   const rows = await getD1().prepare(
-    `SELECT id,title,assigned_user_id AS assignedUserId,due_at AS dueAt
-     FROM tickets
-     WHERE deleted_at IS NULL AND status <> 'completed' AND due_at IS NOT NULL AND due_at <= ?`,
+    `SELECT t.id,t.title,ta.user_id AS assignedUserId,t.due_at AS dueAt
+     FROM tickets t JOIN ticket_assignees ta ON ta.ticket_id=t.id
+     WHERE t.deleted_at IS NULL AND t.status <> 'completed' AND t.due_at IS NOT NULL AND t.due_at <= ?`,
   ).bind(upcoming).all<{ id: number; title: string; assignedUserId: number; dueAt: string }>();
   let inserted = 0;
   for (const ticket of rows.results) {
