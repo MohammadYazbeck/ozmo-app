@@ -72,7 +72,8 @@ test("keeps privileged operations behind server-side role checks", async () => {
     readFile(new URL("../app/OzmoApp.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(inventory, /requireAdmin\(request\)/);
+  assert.match(inventory, /requireUser\(request\)/);
+  assert.match(inventory, /actor\.role !== "admin" && actor\.role !== "account_manager"/);
   assert.match(clients, /requireUser\(request\)/);
   assert.match(manualNotifications, /requireAdmin\(request\)/);
   assert.match(manualNotifications, /suppressPush: true/);

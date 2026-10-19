@@ -1,14 +1,21 @@
 import {
   AuthError,
   authErrorResponse,
-  requireAdmin,
+  requireUser,
 } from "@/lib/auth";
 import { ensureDatabase, getD1 } from "@/lib/db";
 import { damascusDate } from "@/lib/time";
 
 export async function POST(request: Request) {
   try {
-    const admin = await requireAdmin(request);
+    const actor = await requireUser(request);
+    if (actor.role !== "admin" && actor.role !== "account_manager") {
+      throw new AuthError(
+        403,
+        "INVENTORY_MANAGER_REQUIRED",
+        "Only administrators and account managers can adjust inventory.",
+      );
+    }
     await ensureDatabase();
     const database = getD1();
     const body = (await request.json().catch(() => null)) as {
@@ -69,7 +76,7 @@ export async function POST(request: Request) {
                (client_id,content_type,delta,event_type,actor_user_id,note,occurred_on)
              VALUES (?,?,?,'manual_adjustment',?,?,?)`,
           )
-          .bind(clientId, type, delta, admin.id, reason, damascusDate()),
+          .bind(clientId, type, delta, actor.id, reason, damascusDate()),
         database
           .prepare("UPDATE clients SET updated_at=CURRENT_TIMESTAMP WHERE id=?")
           .bind(clientId),

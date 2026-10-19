@@ -6384,7 +6384,7 @@ export default function OzmoApp() {
           <InventoryPage
             clients={clients}
             onChanged={loadData}
-            canAdjust={false}
+            canAdjust={user.role === "account_manager"}
             reelsOnly={false}
           />
         );
