@@ -15,6 +15,9 @@ type TicketRow = {
   clientName: string | null;
   status: TicketStatus;
   dueAt: string | null;
+  assignmentUrl: string | null;
+  completionUrl: string | null;
+  completionUrlAddedAt: string | null;
   createdByUserId: number;
   createdByName: string;
   completedAt: string | null;
@@ -61,6 +64,21 @@ function optionalDueAt(value: unknown) {
   return new Date(value).toISOString();
 }
 
+function optionalUrl(value: unknown, field: string) {
+  if (value == null || value === "") return null;
+  const normalized = text(value, 2048, field, true);
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    throw new AuthError(400, "INVALID_TICKET_URL", `${field} must be a complete link.`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new AuthError(400, "INVALID_TICKET_URL", `${field} must use http or https.`);
+  }
+  return parsed.toString();
+}
+
 async function requireActiveUser(userId: number) {
   const row = await getD1().prepare("SELECT id FROM users WHERE id=? AND is_active=1").bind(userId).first();
   if (!row) throw new AuthError(400, "INVALID_ASSIGNEE", "Choose an active team member.");
@@ -74,9 +92,9 @@ async function requireActiveClient(clientId: number | null) {
 
 async function loadTicket(ticketId: number) {
   const row = await getD1().prepare(
-    `SELECT id,title,assigned_user_id AS assignedUserId,status
+    `SELECT id,title,assigned_user_id AS assignedUserId,status,completion_url AS completionUrl
      FROM tickets WHERE id=? AND deleted_at IS NULL`,
-  ).bind(ticketId).first<{ id: number; title: string; assignedUserId: number; status: TicketStatus }>();
+  ).bind(ticketId).first<{ id: number; title: string; assignedUserId: number; status: TicketStatus; completionUrl: string | null }>();
   if (!row) throw new AuthError(404, "TICKET_NOT_FOUND", "Ticket not found.");
   return row;
 }
@@ -126,6 +144,8 @@ export async function GET(request: Request) {
       `SELECT t.id,t.title,t.description,
               t.assigned_user_id AS assignedUserId,assignee.display_name AS assignedUserName,
               t.client_id AS clientId,c.name AS clientName,t.status,t.due_at AS dueAt,
+              t.assignment_url AS assignmentUrl,t.completion_url AS completionUrl,
+              t.completion_url_added_at AS completionUrlAddedAt,
               t.created_by_user_id AS createdByUserId,creator.display_name AS createdByName,
               t.completed_at AS completedAt,t.created_at AS createdAt,t.updated_at AS updatedAt
        FROM tickets t
@@ -180,14 +200,15 @@ export async function POST(request: Request) {
     const assignedUserId = positiveId(body.assignedUserId, "Assigned member");
     const clientId = optionalId(body.clientId, "Client");
     const dueAt = optionalDueAt(body.dueAt);
+    const assignmentUrl = optionalUrl(body.assignmentUrl, "Assignment link");
     const checkpointLabels = Array.isArray(body.checkpoints)
       ? body.checkpoints.map((value) => text(value, 240, "Checkpoint")).filter(Boolean).slice(0, 50)
       : [];
     await Promise.all([requireActiveUser(assignedUserId), requireActiveClient(clientId)]);
     const result = await getD1().prepare(
-      `INSERT INTO tickets (title,description,assigned_user_id,client_id,due_at,created_by_user_id)
-       VALUES (?,?,?,?,?,?)`,
-    ).bind(title, description, assignedUserId, clientId, dueAt, admin.id).run();
+      `INSERT INTO tickets (title,description,assigned_user_id,client_id,due_at,assignment_url,created_by_user_id)
+       VALUES (?,?,?,?,?,?,?)`,
+    ).bind(title, description, assignedUserId, clientId, dueAt, assignmentUrl, admin.id).run();
     const ticketId = Number(result.meta.last_row_id);
     for (const [index, label] of checkpointLabels.entries()) {
       await getD1().prepare(
@@ -275,6 +296,36 @@ export async function PATCH(request: Request) {
           });
         }
       }
+      return Response.json({ ok: true });
+    }
+
+    if (action === "add_completion_link") {
+      if (!isAssignee) {
+        throw new AuthError(403, "ASSIGNEE_REQUIRED", "Only the assigned team member can add the completion link.");
+      }
+      if (ticket.status !== "completed") {
+        throw new AuthError(409, "TICKET_NOT_COMPLETED", "Mark the ticket as completed before adding the completion link.");
+      }
+      const completionUrl = optionalUrl(body.completionUrl, "Completion link");
+      if (!completionUrl) throw new AuthError(400, "COMPLETION_LINK_REQUIRED", "Enter a completion link.");
+      await db.prepare(
+        `UPDATE tickets SET completion_url=?,completion_url_added_at=COALESCE(completion_url_added_at,CURRENT_TIMESTAMP),
+         completion_url_added_by_user_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      ).bind(completionUrl, user.id, ticketId).run();
+      await addEvent(ticketId, user.id, ticket.completionUrl ? "completion_link_updated" : "completion_link_added", completionUrl);
+      const admins = await db.prepare(
+        "SELECT id FROM users WHERE role='admin' AND is_active=1 AND id<>?",
+      ).bind(user.id).all<{ id: number }>();
+      const adminIds = admins.results.map((row) => Number(row.id));
+      if (adminIds.length) await enqueueNotification({
+        recipientUserIds: adminIds,
+        kind: "ticket_updated",
+        titleEn: ticket.completionUrl ? "Completion link updated" : "Completion link submitted",
+        titleAr: ticket.completionUrl ? "تم تحديث رابط الإنجاز" : "تم إرسال رابط الإنجاز",
+        messageEn: `The completion link for ${ticket.title} was ${ticket.completionUrl ? "updated" : "submitted"}.`,
+        messageAr: `تم ${ticket.completionUrl ? "تحديث" : "إرسال"} رابط الإنجاز لـ ${ticket.title}.`,
+        dedupeKey: `ticket:${ticketId}:completion-link:${Date.now()}`,
+      });
       return Response.json({ ok: true });
     }
 

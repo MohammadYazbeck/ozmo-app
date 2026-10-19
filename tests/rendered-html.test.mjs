@@ -491,15 +491,23 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(database, /CREATE TABLE IF NOT EXISTS tickets/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_checkpoints/);
   assert.match(database, /deleted_at TEXT/);
+  assert.match(database, /ensureColumn\(database, "tickets", "assignment_url"/);
+  assert.match(database, /ensureColumn\(database, "tickets", "completion_url"/);
   assert.match(route, /requireAdmin\(request\)/);
   assert.match(route, /isAssignee/);
   assert.match(route, /action === "status"/);
   assert.match(route, /action === "toggle_checkpoint"/);
+  assert.match(route, /action === "add_completion_link"/);
+  assert.match(route, /Only the assigned team member can add the completion link/);
+  assert.match(route, /Mark the ticket as completed before adding the completion link/);
+  assert.match(route, /completion_link_updated/);
   assert.doesNotMatch(
     route,
     /toggle_checkpoint[\s\S]{0,1800}UPDATE tickets SET status/,
   );
   assert.match(page, /they never change ticket status/i);
   assert.match(page, /changed manually/i);
+  assert.match(page, /locked after creation/i);
+  assert.match(page, /Update completed work/i);
   assert.match(app, /\["tickets", "My tickets", "ticket"\]/);
 });

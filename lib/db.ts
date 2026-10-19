@@ -403,6 +403,10 @@ async function initializeDatabase(): Promise<void> {
       client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','completed')),
       due_at TEXT,
+      assignment_url TEXT,
+      completion_url TEXT,
+      completion_url_added_at TEXT,
+      completion_url_added_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
       completed_at TEXT,
       deleted_at TEXT,
@@ -502,6 +506,10 @@ async function initializeDatabase(): Promise<void> {
   await ensureColumn(database, "sessions", "photos_shot", "INTEGER");
   await ensureColumn(database, "portal_notifications", "title_en", "TEXT");
   await ensureColumn(database, "portal_notifications", "message_en", "TEXT");
+  await ensureColumn(database, "tickets", "assignment_url", "TEXT");
+  await ensureColumn(database, "tickets", "completion_url", "TEXT");
+  await ensureColumn(database, "tickets", "completion_url_added_at", "TEXT");
+  await ensureColumn(database, "tickets", "completion_url_added_by_user_id", "INTEGER");
   await ensureShotReelInventorySupport(database);
   await backfillOzmoClientIds(database);
   await database
@@ -567,7 +575,7 @@ async function initializeDatabase(): Promise<void> {
 
 async function ensureColumn(
   database: D1Database,
-  tableName: "clients" | "tasks" | "sessions" | "portal_notifications",
+  tableName: "clients" | "tasks" | "sessions" | "portal_notifications" | "tickets",
   columnName: string,
   definition: string,
 ) {

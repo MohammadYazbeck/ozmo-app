@@ -16,6 +16,9 @@ type Ticket = {
   clientName: string | null;
   status: TicketStatus;
   dueAt: string | null;
+  assignmentUrl: string | null;
+  completionUrl: string | null;
+  completionUrlAddedAt: string | null;
   createdByName: string;
   createdAt: string;
   updatedAt: string;
@@ -70,6 +73,8 @@ export default function TicketsPage({
   const [assigneeId, setAssigneeId] = useState("");
   const [clientId, setClientId] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [assignmentUrl, setAssignmentUrl] = useState("");
+  const [completionDraft, setCompletionDraft] = useState("");
   const [checkpointDrafts, setCheckpointDrafts] = useState<string[]>([""]);
   const [newCheckpoint, setNewCheckpoint] = useState("");
   const [busy, setBusy] = useState(false);
@@ -119,6 +124,7 @@ export default function TicketsPage({
     setAssigneeId(users.find((user) => user.isActive !== false && user.role !== "admin")?.id.toString() ?? "");
     setClientId("");
     setDueAt("");
+    setAssignmentUrl("");
     setCheckpointDrafts([""]);
     setNewCheckpoint("");
   }
@@ -137,6 +143,7 @@ export default function TicketsPage({
     setAssigneeId(ticket.assignedUserId);
     setClientId(ticket.clientId ?? "");
     setDueAt(inputDate(ticket.dueAt));
+    setAssignmentUrl("");
     setNewCheckpoint("");
     setError("");
     setMessage("");
@@ -160,7 +167,7 @@ export default function TicketsPage({
         await request("/api/tickets", { method: "PATCH", body: JSON.stringify({ ...body, ticketId: editing.id, action: "update" }) });
         setMessage("Ticket updated.");
       } else {
-        await request("/api/tickets", { method: "POST", body: JSON.stringify({ ...body, checkpoints: checkpointDrafts }) });
+        await request("/api/tickets", { method: "POST", body: JSON.stringify({ ...body, assignmentUrl: assignmentUrl || null, checkpoints: checkpointDrafts }) });
         setMessage("Ticket created and the team member was notified.");
       }
       setFormOpen(false);
@@ -240,6 +247,22 @@ export default function TicketsPage({
     }
   }
 
+  async function submitCompletionLink(ticket: Ticket) {
+    if (!completionDraft.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request("/api/tickets", { method: "PATCH", body: JSON.stringify({ ticketId: ticket.id, action: "add_completion_link", completionUrl: completionDraft }) });
+      setCompletionDraft("");
+      setMessage(ticket.completionUrl ? "Completion link updated." : "Completion link submitted.");
+      await load();
+    } catch (linkError) {
+      setError((linkError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="tickets-page">
       <header className="tickets-heading">
@@ -276,7 +299,7 @@ export default function TicketsPage({
             const overdue = Boolean(ticket.dueAt && ticket.status !== "completed" && new Date(ticket.dueAt) < new Date());
             const isExpanded = expanded === ticket.id;
             return <article className={`ticket-card status-${ticket.status} ${isExpanded ? "expanded" : ""}`} key={ticket.id}>
-              <button className="ticket-summary" type="button" onClick={() => setExpanded(isExpanded ? null : ticket.id)} aria-expanded={isExpanded}>
+              <button className="ticket-summary" type="button" onClick={() => { setExpanded(isExpanded ? null : ticket.id); setCompletionDraft(isExpanded ? "" : ticket.completionUrl ?? ""); }} aria-expanded={isExpanded}>
                 <span className={`ticket-status-dot ${ticket.status}`} />
                 <span className="ticket-main-copy"><strong>{ticket.title}</strong><small>{ticket.clientName || "Internal task"} · {ticket.assignedUserName}</small></span>
                 <span className={`ticket-due ${overdue ? "overdue" : ""}`}>{overdue ? "Overdue · " : ""}{dueLabel(ticket.dueAt)}</span>
@@ -288,11 +311,16 @@ export default function TicketsPage({
                   <div className="ticket-description"><span>Description</span><p>{ticket.description || "No description was added."}</p></div>
                   <label className="ticket-manual-status"><span>Status · changed manually</span><select value={ticket.status} disabled={busy} onChange={(event) => void changeStatus(ticket, event.target.value as TicketStatus)}>{Object.entries(STATUS_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 </div>
+                {(ticket.assignmentUrl || ticket.completionUrl) && <section className="ticket-links">
+                  {ticket.assignmentUrl && <div><span>Assignment link <small>Locked</small></span><a href={ticket.assignmentUrl} target="_blank" rel="noreferrer">Open reference ↗</a></div>}
+                  {ticket.completionUrl && <div><span>Completion link <small>Submitted</small></span><a href={ticket.completionUrl} target="_blank" rel="noreferrer">View completed work ↗</a></div>}
+                </section>}
                 <section className="ticket-checkpoints">
                   <header><div><strong>Checkpoints</strong><small>Optional guidance — they never change ticket status.</small></div>{ticket.checkpoints.length > 0 && <span>{done} of {ticket.checkpoints.length}</span>}</header>
                   {ticket.checkpoints.length === 0 ? <p className="checkpoint-empty">This ticket has no checkpoints. It can still be completed normally.</p> : <div className="checkpoint-list">{ticket.checkpoints.map((checkpoint) => <div className={checkpoint.completed ? "done" : ""} key={checkpoint.id}><label><input type="checkbox" checked={checkpoint.completed} disabled={busy} onChange={() => void toggleCheckpoint(ticket, checkpoint)} /><span>{checkpoint.label}</span></label>{isAdmin && <button type="button" onClick={() => void deleteCheckpoint(ticket, checkpoint)} aria-label={`Delete ${checkpoint.label}`}>×</button>}</div>)}</div>}
                   {isAdmin && <div className="checkpoint-add"><input value={newCheckpoint} maxLength={240} onChange={(event) => setNewCheckpoint(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addCheckpoint(ticket); } }} placeholder="Add a checkpoint" /><button type="button" disabled={busy || !newCheckpoint.trim()} onClick={() => void addCheckpoint(ticket)}>Add</button></div>}
                 </section>
+                {String(ticket.assignedUserId) === String(currentUser.id) && ticket.status === "completed" && <section className="ticket-completion-link"><div><strong>{ticket.completionUrl ? "Update completed work" : "Add completed work"}</strong><small>Optional. Add the final work link after manually completing the ticket.</small></div><div><input type="url" value={completionDraft} onChange={(event) => setCompletionDraft(event.target.value)} placeholder="https://…" /><button type="button" disabled={busy || !completionDraft.trim()} onClick={() => void submitCompletionLink(ticket)}>{ticket.completionUrl ? "Update link" : "Submit link"}</button></div></section>}
                 <footer className="ticket-detail-footer"><small>Created by {ticket.createdByName} · {dueLabel(ticket.createdAt)}</small>{isAdmin && <div><button type="button" onClick={() => openEdit(ticket)}>Edit ticket</button><button className="danger" type="button" onClick={() => void deleteTicket(ticket)}>Delete</button></div>}</footer>
               </div>}
             </article>;
@@ -310,6 +338,7 @@ export default function TicketsPage({
             <label><span>Client <small>optional</small></span><select value={clientId} onChange={(event) => setClientId(event.target.value)}><option value="">Internal task</option>{clients.filter((client) => client.isActive !== false).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
           </div>
           <label><span>Due date <small>optional</small></span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label>
+          {!editing && <label><span>Assignment link <small>optional · locked after creation</small></span><input type="url" maxLength={2048} value={assignmentUrl} onChange={(event) => setAssignmentUrl(event.target.value)} placeholder="https://…" /></label>}
           {!editing && <fieldset className="ticket-checkpoint-builder"><legend>Checkpoints <small>optional</small></legend><p>Useful milestones only. Completing them will not change the ticket status.</p>{checkpointDrafts.map((checkpoint, index) => <div key={index}><input maxLength={240} value={checkpoint} onChange={(event) => setCheckpointDrafts((items) => items.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`Checkpoint ${index + 1}`} />{checkpointDrafts.length > 1 && <button type="button" onClick={() => setCheckpointDrafts((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>}</div>)}<button className="checkpoint-builder-add" type="button" onClick={() => setCheckpointDrafts((items) => [...items, ""])}>＋ Add checkpoint</button></fieldset>}
           {error && <div className="form-error">{error}</div>}
           <footer><button className="button" type="button" disabled={busy} onClick={() => setFormOpen(false)}>Cancel</button><button className="button button-primary" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Create & notify"}</button></footer>
