@@ -57,16 +57,19 @@ export default function TicketsPage({
   currentUser,
   users,
   clients,
+  scope,
 }: {
   currentUser: Person;
   users: Person[];
   clients: Client[];
+  scope: "mine" | "all";
 }) {
   const isAdmin = currentUser.role === "admin";
-  const canCreate = isAdmin || currentUser.role === "account_manager";
+  const canCreate = scope === "all" && (isAdmin || currentUser.role === "account_manager");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [availableUsers, setAvailableUsers] = useState<Person[]>(users);
   const [filter, setFilter] = useState<"active" | TicketStatus>("active");
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Ticket | null>(null);
@@ -86,7 +89,7 @@ export default function TicketsPage({
 
   const load = useCallback(async () => {
     try {
-      const result = await request<{ tickets: Ticket[]; availableAssignees: Person[] }>("/api/tickets");
+      const result = await request<{ tickets: Ticket[]; availableAssignees: Person[] }>(`/api/tickets?scope=${scope}`);
       setTickets(result.tickets);
       if (result.availableAssignees.length) setAvailableUsers(result.availableAssignees);
     } catch (loadError) {
@@ -94,7 +97,7 @@ export default function TicketsPage({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -108,17 +111,30 @@ export default function TicketsPage({
     };
   }, [load]);
 
-  const visible = useMemo(() => tickets.filter((ticket) => {
+  const employeeTickets = useMemo(
+    () => employeeFilter
+      ? tickets.filter((ticket) => ticket.assignees.some((assignee) => assignee.userId === employeeFilter))
+      : tickets,
+    [employeeFilter, tickets],
+  );
+
+  const visible = useMemo(() => employeeTickets.filter((ticket) => {
     if (filter === "active") return ticket.status !== "completed";
     return ticket.status === filter;
-  }), [filter, tickets]);
+  }), [employeeTickets, filter]);
 
   const counts = useMemo(() => ({
-    active: tickets.filter((ticket) => ticket.status !== "completed").length,
-    open: tickets.filter((ticket) => ticket.status === "open").length,
-    in_progress: tickets.filter((ticket) => ticket.status === "in_progress").length,
-    completed: tickets.filter((ticket) => ticket.status === "completed").length,
-  }), [tickets]);
+    active: employeeTickets.filter((ticket) => ticket.status !== "completed").length,
+    open: employeeTickets.filter((ticket) => ticket.status === "open").length,
+    in_progress: employeeTickets.filter((ticket) => ticket.status === "in_progress").length,
+    completed: employeeTickets.filter((ticket) => ticket.status === "completed").length,
+  }), [employeeTickets]);
+
+  const filterEmployees = useMemo(() => {
+    const members = new Map<string, string>();
+    tickets.forEach((ticket) => ticket.assignees.forEach((assignee) => members.set(assignee.userId, assignee.displayName)));
+    return [...members.entries()].sort((left, right) => left[1].localeCompare(right[1], "en", { sensitivity: "base" }));
+  }, [tickets]);
 
   function clearForm() {
     setEditing(null);
@@ -270,6 +286,10 @@ export default function TicketsPage({
     return isAdmin || (currentUser.role === "account_manager" && String(ticket.createdByUserId) === String(currentUser.id));
   }
 
+  function canWorkTicket(ticket: Ticket) {
+    return canManageTicket(ticket) || ticket.assignees.some((assignee) => String(assignee.userId) === String(currentUser.id));
+  }
+
   function toggleAssignee(userId: string) {
     setAssigneeIds((current) => {
       if (current.includes(userId)) return current.filter((id) => id !== userId);
@@ -283,8 +303,8 @@ export default function TicketsPage({
       <header className="tickets-heading">
         <div>
           <span className="eyebrow">Team workflow</span>
-          <h1>{canCreate ? "Tickets" : "My tickets"}</h1>
-          <p>{canCreate ? "Assign one shared ticket to one or two team members and follow its progress." : "Your assigned work, deadlines, and checkpoints in one place."}</p>
+          <h1>{scope === "all" ? "All tickets" : "My tickets"}</h1>
+          <p>{scope === "all" ? "View the full team queue, assign new work, and filter tickets by employee." : "Tickets assigned directly to you, with shared progress and deadlines."}</p>
         </div>
         <div className="ticket-heading-actions">
           <button className="button" type="button" disabled={loading} onClick={() => void load()}>↻ Refresh</button>
@@ -292,13 +312,16 @@ export default function TicketsPage({
         </div>
       </header>
 
-      <nav className="ticket-filters" aria-label="Ticket filters">
-        {(["active", "open", "in_progress", "completed"] as const).map((value) => (
-          <button key={value} type="button" className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>
-            <span>{value === "active" ? "Active" : STATUS_COPY[value]}</span><b>{counts[value]}</b>
-          </button>
-        ))}
-      </nav>
+      <div className="ticket-filter-bar">
+        <nav className="ticket-filters" aria-label="Ticket filters">
+          {(["active", "open", "in_progress", "completed"] as const).map((value) => (
+            <button key={value} type="button" className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>
+              <span>{value === "active" ? "Active" : STATUS_COPY[value]}</span><b>{counts[value]}</b>
+            </button>
+          ))}
+        </nav>
+        {scope === "all" && <label className="ticket-employee-filter"><span>Assigned employee</span><select value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}><option value="">All employees</option>{filterEmployees.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
+      </div>
 
       {error && <div className="form-error ticket-feedback">{error}</div>}
       {message && <div className="form-success ticket-feedback">{message}</div>}
@@ -324,7 +347,7 @@ export default function TicketsPage({
               {isExpanded && <div className="ticket-detail">
                 <div className="ticket-detail-grid">
                   <div className="ticket-description"><span>Description</span><p>{ticket.description || "No description was added."}</p></div>
-                  <label className="ticket-manual-status"><span>Status · changed manually</span><select value={ticket.status} disabled={busy} onChange={(event) => void changeStatus(ticket, event.target.value as TicketStatus)}>{Object.entries(STATUS_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                  <label className="ticket-manual-status"><span>Status · changed manually</span><select value={ticket.status} disabled={busy || !canWorkTicket(ticket)} onChange={(event) => void changeStatus(ticket, event.target.value as TicketStatus)}>{Object.entries(STATUS_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 </div>
                 {(ticket.assignmentUrl || ticket.completionUrl) && <section className="ticket-links">
                   {ticket.assignmentUrl && <div><span>Assignment link <small>Locked</small></span><a href={ticket.assignmentUrl} target="_blank" rel="noreferrer">Open reference ↗</a></div>}
@@ -332,7 +355,7 @@ export default function TicketsPage({
                 </section>}
                 <section className="ticket-checkpoints">
                   <header><div><strong>Checkpoints</strong><small>Optional guidance — they never change ticket status.</small></div>{ticket.checkpoints.length > 0 && <span>{done} of {ticket.checkpoints.length}</span>}</header>
-                  {ticket.checkpoints.length === 0 ? <p className="checkpoint-empty">This ticket has no checkpoints. It can still be completed normally.</p> : <div className="checkpoint-list">{ticket.checkpoints.map((checkpoint) => <div className={checkpoint.completed ? "done" : ""} key={checkpoint.id}><label><input type="checkbox" checked={checkpoint.completed} disabled={busy} onChange={() => void toggleCheckpoint(ticket, checkpoint)} /><span>{checkpoint.label}</span></label>{canManageTicket(ticket) && <button type="button" onClick={() => void deleteCheckpoint(ticket, checkpoint)} aria-label={`Delete ${checkpoint.label}`}>×</button>}</div>)}</div>}
+                  {ticket.checkpoints.length === 0 ? <p className="checkpoint-empty">This ticket has no checkpoints. It can still be completed normally.</p> : <div className="checkpoint-list">{ticket.checkpoints.map((checkpoint) => <div className={checkpoint.completed ? "done" : ""} key={checkpoint.id}><label><input type="checkbox" checked={checkpoint.completed} disabled={busy || !canWorkTicket(ticket)} onChange={() => void toggleCheckpoint(ticket, checkpoint)} /><span>{checkpoint.label}</span></label>{canManageTicket(ticket) && <button type="button" onClick={() => void deleteCheckpoint(ticket, checkpoint)} aria-label={`Delete ${checkpoint.label}`}>×</button>}</div>)}</div>}
                   {canManageTicket(ticket) && <div className="checkpoint-add"><input value={newCheckpoint} maxLength={240} onChange={(event) => setNewCheckpoint(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addCheckpoint(ticket); } }} placeholder="Add a checkpoint" /><button type="button" disabled={busy || !newCheckpoint.trim()} onClick={() => void addCheckpoint(ticket)}>Add</button></div>}
                 </section>
                 {ticket.assignees.some((assignee) => String(assignee.userId) === String(currentUser.id)) && ticket.status === "completed" && <section className="ticket-completion-link"><div><strong>{ticket.completionUrl ? "Update completed work" : "Add completed work"}</strong><small>Optional. Either assigned member can add the final link after the shared ticket is completed.</small></div><div><input type="url" value={completionDraft} onChange={(event) => setCompletionDraft(event.target.value)} placeholder="https://…" /><button type="button" disabled={busy || !completionDraft.trim()} onClick={() => void submitCompletionLink(ticket)}>{ticket.completionUrl ? "Update link" : "Submit link"}</button></div></section>}

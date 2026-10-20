@@ -267,7 +267,8 @@ type AppSection =
   | "activity"
   | "settings"
   | "history"
-  | "tickets"
+  | "tickets_all"
+  | "tickets_mine"
   | "help";
 
 type ActionOption = {
@@ -2343,7 +2344,11 @@ function InventoryPage({
   canAdjust?: boolean;
   reelsOnly?: boolean;
 }) {
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
+  const sortedClients = useMemo(
+    () => [...clients].sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base" })),
+    [clients],
+  );
+  const [clientId, setClientId] = useState(sortedClients[0]?.id ?? "");
   const [type, setType] = useState<
     "draft" | "shot_reel" | "reel" | "post" | "story"
   >("shot_reel");
@@ -2352,6 +2357,12 @@ function InventoryPage({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!sortedClients.some((client) => client.id === clientId)) {
+      setClientId(sortedClients[0]?.id ?? "");
+    }
+  }, [clientId, sortedClients]);
 
   async function adjust(event: FormEvent) {
     event.preventDefault();
@@ -2444,7 +2455,7 @@ function InventoryPage({
                 </tr>
               </thead>
               <tbody>
-                {clients.map((client) => (
+                {sortedClients.map((client) => (
                   <tr key={client.id}>
                     <td data-label="Client">
                       <span className="table-client">
@@ -2500,7 +2511,7 @@ function InventoryPage({
             <label>
               Client
               <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-                {clients.map((client) => (
+                {sortedClients.map((client) => (
                   <option value={client.id} key={client.id}>{client.name}</option>
                 ))}
               </select>
@@ -5944,10 +5955,17 @@ function AppShell({
   const [mobileNav, setMobileNav] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isAdmin = user.role === "admin";
+  const canManageTickets = isAdmin || user.role === "account_manager";
   const clientGroupStorageKey = `ozmo-sidebar-client-${isAdmin ? "admin" : "staff"}`;
+  const ticketGroupStorageKey = `ozmo-sidebar-tickets-${isAdmin ? "admin" : "account-manager"}`;
   const [clientNavOpen, setClientNavOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     const stored = window.localStorage.getItem(clientGroupStorageKey);
+    return stored == null ? true : stored === "true";
+  });
+  const [ticketNavOpen, setTicketNavOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(ticketGroupStorageKey);
     return stored == null ? true : stored === "true";
   });
   type NavItem = [AppSection, string, Parameters<typeof Icon>[0]["name"]];
@@ -5955,13 +5973,18 @@ function AppShell({
     ? [
         ["home", "Overview", "home"],
         ["reports", "Reports", "activity"],
-        ["tickets", "Tickets", "ticket"],
       ]
     : [
         ["home", "Today’s report", "home"],
         ["history", "My history", "history"],
-        ["tickets", user.role === "account_manager" ? "Tickets" : "My tickets", "ticket"],
+        ...(user.role === "account_manager"
+          ? []
+          : ([["tickets_mine", "My tickets", "ticket"]] as NavItem[])),
       ];
+  const ticketNav: NavItem[] = [
+    ["tickets_mine", "My tickets", "ticket"],
+    ["tickets_all", "All tickets", "clients"],
+  ];
   const clientNav: NavItem[] = isAdmin
     ? [
         ["clients", "Clients", "clients"],
@@ -5989,6 +6012,7 @@ function AppShell({
         ["help", "Help & rules", "help"],
       ];
   const clientSectionActive = clientNav.some(([value]) => value === section);
+  const ticketSectionActive = ticketNav.some(([value]) => value === section);
   const unread = notifications.filter((item) => !item.read).length;
 
   useEffect(() => {
@@ -5997,10 +6021,24 @@ function AppShell({
     window.localStorage.setItem(clientGroupStorageKey, "true");
   }, [clientGroupStorageKey, clientSectionActive]);
 
+  useEffect(() => {
+    if (!ticketSectionActive || !canManageTickets) return;
+    setTicketNavOpen(true);
+    window.localStorage.setItem(ticketGroupStorageKey, "true");
+  }, [canManageTickets, ticketGroupStorageKey, ticketSectionActive]);
+
   function toggleClientNav() {
     setClientNavOpen((open) => {
       const next = !open;
       window.localStorage.setItem(clientGroupStorageKey, String(next));
+      return next;
+    });
+  }
+
+  function toggleTicketNav() {
+    setTicketNavOpen((open) => {
+      const next = !open;
+      window.localStorage.setItem(ticketGroupStorageKey, String(next));
       return next;
     });
   }
@@ -6047,6 +6085,21 @@ function AppShell({
         <nav>
           <span className="nav-label">Workspace</span>
           {primaryNav.map((item) => renderNavItem(item))}
+          {canManageTickets && <>
+            <button
+              type="button"
+              className={`nav-group-toggle ${ticketSectionActive ? "group-active" : ""}`}
+              aria-expanded={ticketNavOpen}
+              onClick={toggleTicketNav}
+            >
+              <Icon name="ticket" />
+              <span>Tickets</span>
+              <span className={`nav-chevron ${ticketNavOpen ? "open" : ""}`}>⌄</span>
+            </button>
+            <div className={`nav-submenu ${ticketNavOpen ? "open" : ""}`}>
+              {ticketNav.map((item) => renderNavItem(item, true))}
+            </div>
+          </>}
           <button
             type="button"
             className={`nav-group-toggle ${clientSectionActive ? "group-active" : ""}`}
@@ -6368,8 +6421,8 @@ export default function OzmoApp() {
 
   const page = useMemo(() => {
     if (!user) return null;
-    if (section === "tickets") {
-      return <TicketsPage currentUser={user} users={users} clients={clients} />;
+    if (section === "tickets_all" || section === "tickets_mine") {
+      return <TicketsPage key={section} currentUser={user} users={users} clients={clients} scope={section === "tickets_all" ? "all" : "mine"} />;
     }
     if (user.role === "admin") {
       if (section === "home" && dashboard) {

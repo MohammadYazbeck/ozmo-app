@@ -513,5 +513,9 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(page, /changed manually/i);
   assert.match(page, /locked after creation/i);
   assert.match(page, /Update completed work/i);
-  assert.match(app, /user\.role === "account_manager" \? "Tickets" : "My tickets"/);
+  assert.match(page, /Assigned employee/);
+  assert.match(page, /ticket\.assignees\.some/);
+  assert.match(app, /\["tickets_mine", "My tickets", "ticket"\]/);
+  assert.match(app, /\["tickets_all", "All tickets", "clients"\]/);
+  assert.match(app, /left\.name\.localeCompare\(right\.name/);
 });

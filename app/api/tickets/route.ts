@@ -157,11 +157,11 @@ export async function GET(request: Request) {
     await ensureDatabase();
     const db = getD1();
     const canCreate = user.role === "admin" || user.role === "account_manager";
-    const access = user.role === "admin"
+    const requestedScope = new URL(request.url).searchParams.get("scope") === "mine" ? "mine" : "all";
+    const scope = requestedScope === "all" && canCreate ? "all" : "mine";
+    const access = scope === "all"
       ? ""
-      : user.role === "account_manager"
-        ? "AND (EXISTS (SELECT 1 FROM ticket_assignees mine WHERE mine.ticket_id=t.id AND mine.user_id=?) OR t.created_by_user_id=?)"
-        : "AND EXISTS (SELECT 1 FROM ticket_assignees mine WHERE mine.ticket_id=t.id AND mine.user_id=?)";
+      : "AND EXISTS (SELECT 1 FROM ticket_assignees mine WHERE mine.ticket_id=t.id AND mine.user_id=?)";
     const statement = db.prepare(
       `SELECT t.id,t.title,t.description,
               t.client_id AS clientId,c.name AS clientName,t.status,t.due_at AS dueAt,
@@ -176,11 +176,9 @@ export async function GET(request: Request) {
        ORDER BY CASE t.status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 ELSE 2 END,
                 CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC`,
     );
-    const result = user.role === "admin"
+    const result = scope === "all"
       ? await statement.all<TicketRow>()
-      : user.role === "account_manager"
-        ? await statement.bind(user.id, user.id).all<TicketRow>()
-        : await statement.bind(user.id).all<TicketRow>();
+      : await statement.bind(user.id).all<TicketRow>();
     const ids = result.results.map((ticket) => Number(ticket.id));
     let checkpoints: CheckpointRow[] = [];
     let ticketAssignees: AssigneeRow[] = [];
@@ -220,6 +218,7 @@ export async function GET(request: Request) {
         })),
       })),
       availableAssignees: availableResult.results.map((member) => ({ ...member, id: String(member.id) })),
+      scope,
     });
   } catch (error) {
     return authErrorResponse(error);
