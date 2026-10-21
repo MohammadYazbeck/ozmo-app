@@ -402,7 +402,9 @@ async function initializeDatabase(): Promise<void> {
       assigned_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
       client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','completed')),
+      priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','high','very_high')),
       due_at TEXT,
+      scheduled_at TEXT,
       assignment_url TEXT,
       completion_url TEXT,
       completion_url_added_at TEXT,
@@ -437,6 +439,14 @@ async function initializeDatabase(): Promise<void> {
       event_type TEXT NOT NULL,
       detail TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS ticket_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      author_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
     "CREATE INDEX IF NOT EXISTS users_role_idx ON users(role)",
     "CREATE INDEX IF NOT EXISTS clients_active_idx ON clients(is_active)",
@@ -475,6 +485,7 @@ async function initializeDatabase(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS ticket_checkpoints_ticket_sort_idx ON ticket_checkpoints(ticket_id,sort_order,id)",
     "CREATE INDEX IF NOT EXISTS ticket_assignees_user_idx ON ticket_assignees(user_id,ticket_id)",
     "CREATE INDEX IF NOT EXISTS ticket_events_ticket_date_idx ON ticket_events(ticket_id,created_at)",
+    "CREATE INDEX IF NOT EXISTS ticket_comments_ticket_date_idx ON ticket_comments(ticket_id,created_at)",
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_user_idx ON portal_auth_sessions(portal_user_id)",
     "CREATE INDEX IF NOT EXISTS portal_auth_sessions_expiry_idx ON portal_auth_sessions(expires_at)",
     "CREATE INDEX IF NOT EXISTS portal_login_attempts_updated_idx ON portal_login_attempts(updated_at)",
@@ -515,6 +526,8 @@ async function initializeDatabase(): Promise<void> {
   await ensureColumn(database, "portal_notifications", "title_en", "TEXT");
   await ensureColumn(database, "portal_notifications", "message_en", "TEXT");
   await ensureColumn(database, "tickets", "assignment_url", "TEXT");
+  await ensureColumn(database, "tickets", "priority", "TEXT NOT NULL DEFAULT 'normal'");
+  await ensureColumn(database, "tickets", "scheduled_at", "TEXT");
   await ensureColumn(database, "tickets", "completion_url", "TEXT");
   await ensureColumn(database, "tickets", "completion_url_added_at", "TEXT");
   await ensureColumn(database, "tickets", "completion_url_added_by_user_id", "INTEGER");

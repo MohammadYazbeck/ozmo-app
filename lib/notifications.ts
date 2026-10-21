@@ -28,7 +28,8 @@ type NotificationKind =
   | "ticket_updated"
   | "ticket_completed"
   | "ticket_due_soon"
-  | "ticket_overdue";
+  | "ticket_overdue"
+  | "ticket_scheduled";
 
 type NotificationInput = {
   recipientUserIds: number[];
@@ -1006,6 +1007,24 @@ async function processTicketDeadlineAlerts(date: Date) {
         : `موعد ${ticket.title} خلال الـ 24 ساعة القادمة.`,
       dedupeKey: `ticket:${ticket.id}:${overdue ? "overdue" : "due-soon"}:${ticket.dueAt}`,
       dueAt: ticket.dueAt,
+    });
+  }
+  const scheduled = await getD1().prepare(
+    `SELECT t.id,t.title,t.scheduled_at AS scheduledAt,ta.user_id AS recipientUserId
+     FROM tickets t JOIN ticket_assignees ta ON ta.ticket_id=t.id
+     WHERE t.deleted_at IS NULL AND t.status <> 'completed'
+       AND t.scheduled_at IS NOT NULL AND t.scheduled_at <= ?`,
+  ).bind(now).all<{ id: number; title: string; scheduledAt: string; recipientUserId: number }>();
+  for (const ticket of scheduled.results) {
+    inserted += await enqueueNotification({
+      recipientUserIds: [Number(ticket.recipientUserId)],
+      kind: "ticket_scheduled",
+      titleEn: "Scheduled ticket is starting",
+      titleAr: "بدأ موعد التذكرة المجدولة",
+      messageEn: `${ticket.title} is scheduled to start now.`,
+      messageAr: `حان الآن موعد بدء ${ticket.title}.`,
+      dedupeKey: `ticket:${ticket.id}:scheduled:${ticket.scheduledAt}`,
+      dueAt: ticket.scheduledAt,
     });
   }
   return inserted;

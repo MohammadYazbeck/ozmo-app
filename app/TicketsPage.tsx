@@ -3,9 +3,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type TicketStatus = "open" | "in_progress" | "completed";
+type TicketPriority = "normal" | "high" | "very_high";
 type Person = { id: string | number; displayName: string; role: string; isActive?: boolean };
 type Client = { id: string | number; name: string; isActive?: boolean };
 type Checkpoint = { id: string; label: string; completed: boolean; completedAt: string | null };
+type TicketComment = { id: string; authorUserId: string; authorName: string; body: string; createdAt: string };
 type Ticket = {
   id: string;
   title: string;
@@ -14,7 +16,9 @@ type Ticket = {
   clientId: string | null;
   clientName: string | null;
   status: TicketStatus;
+  priority: TicketPriority;
   dueAt: string | null;
+  scheduledAt: string | null;
   assignmentUrl: string | null;
   completionUrl: string | null;
   completionUrlAddedAt: string | null;
@@ -23,6 +27,7 @@ type Ticket = {
   createdAt: string;
   updatedAt: string;
   checkpoints: Checkpoint[];
+  comments: TicketComment[];
 };
 
 const STATUS_COPY: Record<TicketStatus, string> = {
@@ -30,6 +35,7 @@ const STATUS_COPY: Record<TicketStatus, string> = {
   in_progress: "In progress",
   completed: "Completed",
 };
+const PRIORITY_COPY: Record<TicketPriority, string> = { normal: "Normal", high: "High", very_high: "Very high" };
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -51,6 +57,11 @@ function inputDate(value: string | null) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function dateTimeLabel(value: string | null) {
+  if (!value) return "Not scheduled";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
 export default function TicketsPage({
@@ -77,9 +88,12 @@ export default function TicketsPage({
   const [description, setDescription] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [clientId, setClientId] = useState("");
+  const [ticketPriority, setTicketPriority] = useState<TicketPriority>("normal");
   const [dueAt, setDueAt] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [assignmentUrl, setAssignmentUrl] = useState("");
   const [completionDraft, setCompletionDraft] = useState("");
+  const [commentDraft, setCommentDraft] = useState("");
   const [checkpointDrafts, setCheckpointDrafts] = useState<string[]>([""]);
   const [newCheckpoint, setNewCheckpoint] = useState("");
   const [busy, setBusy] = useState(false);
@@ -142,7 +156,9 @@ export default function TicketsPage({
     setDescription("");
     setAssigneeIds([]);
     setClientId("");
+    setTicketPriority("normal");
     setDueAt("");
+    setScheduledAt("");
     setAssignmentUrl("");
     setCheckpointDrafts([""]);
     setNewCheckpoint("");
@@ -161,9 +177,12 @@ export default function TicketsPage({
     setDescription(ticket.description);
     setAssigneeIds(ticket.assignees.map((assignee) => String(assignee.userId)));
     setClientId(ticket.clientId ?? "");
+    setTicketPriority(ticket.priority);
     setDueAt(inputDate(ticket.dueAt));
+    setScheduledAt(inputDate(ticket.scheduledAt));
     setAssignmentUrl("");
     setNewCheckpoint("");
+    setCommentDraft("");
     setError("");
     setMessage("");
     setFormOpen(true);
@@ -180,7 +199,9 @@ export default function TicketsPage({
         description,
         assignedUserIds: assigneeIds,
         clientId: clientId || null,
+        priority: ticketPriority,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       };
       if (editing) {
         await request("/api/tickets", { method: "PATCH", body: JSON.stringify({ ...body, ticketId: editing.id, action: "update" }) });
@@ -282,12 +303,31 @@ export default function TicketsPage({
     }
   }
 
+  async function addComment(ticket: Ticket) {
+    if (!commentDraft.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request("/api/tickets", { method: "PATCH", body: JSON.stringify({ ticketId: ticket.id, action: "add_comment", body: commentDraft }) });
+      setCommentDraft("");
+      await load();
+    } catch (commentError) {
+      setError((commentError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function canManageTicket(ticket: Ticket) {
     return isAdmin || (currentUser.role === "account_manager" && String(ticket.createdByUserId) === String(currentUser.id));
   }
 
   function canWorkTicket(ticket: Ticket) {
     return canManageTicket(ticket) || ticket.assignees.some((assignee) => String(assignee.userId) === String(currentUser.id));
+  }
+
+  function canCommentTicket(ticket: Ticket) {
+    return String(ticket.createdByUserId) === String(currentUser.id) || ticket.assignees.some((assignee) => String(assignee.userId) === String(currentUser.id));
   }
 
   function toggleAssignee(userId: string) {
@@ -336,10 +376,10 @@ export default function TicketsPage({
             const done = ticket.checkpoints.filter((checkpoint) => checkpoint.completed).length;
             const overdue = Boolean(ticket.dueAt && ticket.status !== "completed" && new Date(ticket.dueAt) < new Date());
             const isExpanded = expanded === ticket.id;
-            return <article className={`ticket-card status-${ticket.status} ${isExpanded ? "expanded" : ""}`} key={ticket.id}>
+            return <article className={`ticket-card status-${ticket.status} priority-${ticket.priority} ${isExpanded ? "expanded" : ""}`} key={ticket.id}>
               <button className="ticket-summary" type="button" onClick={() => { setExpanded(isExpanded ? null : ticket.id); setCompletionDraft(isExpanded ? "" : ticket.completionUrl ?? ""); }} aria-expanded={isExpanded}>
                 <span className={`ticket-status-dot ${ticket.status}`} />
-                <span className="ticket-main-copy"><strong>{ticket.title}</strong><small>{ticket.clientName || "Internal task"} · {ticket.assignees.map((assignee) => assignee.displayName).join(" + ")}</small></span>
+                <span className="ticket-main-copy"><strong>{ticket.title}</strong><small>{ticket.clientName || "Internal task"} · {ticket.assignees.map((assignee) => assignee.displayName).join(" + ")}</small><i className={`ticket-priority priority-${ticket.priority}`}>{PRIORITY_COPY[ticket.priority]}</i></span>
                 <span className={`ticket-due ${overdue ? "overdue" : ""}`}>{overdue ? "Overdue · " : ""}{dueLabel(ticket.dueAt)}</span>
                 <span className="ticket-progress">{ticket.checkpoints.length ? `${done}/${ticket.checkpoints.length}` : "No checkpoints"}</span>
                 <span className="ticket-chevron">⌄</span>
@@ -347,7 +387,7 @@ export default function TicketsPage({
               {isExpanded && <div className="ticket-detail">
                 <div className="ticket-detail-grid">
                   <div className="ticket-description"><span>Description</span><p>{ticket.description || "No description was added."}</p></div>
-                  <label className="ticket-manual-status"><span>Status · changed manually</span><select value={ticket.status} disabled={busy || !canWorkTicket(ticket)} onChange={(event) => void changeStatus(ticket, event.target.value as TicketStatus)}>{Object.entries(STATUS_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                  <div className="ticket-detail-meta"><label className="ticket-manual-status"><span>Status · changed manually</span><select value={ticket.status} disabled={busy || !canWorkTicket(ticket)} onChange={(event) => void changeStatus(ticket, event.target.value as TicketStatus)}>{Object.entries(STATUS_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><span className="ticket-scheduled"><b>Scheduled start</b>{dateTimeLabel(ticket.scheduledAt)}</span></div>
                 </div>
                 {(ticket.assignmentUrl || ticket.completionUrl) && <section className="ticket-links">
                   {ticket.assignmentUrl && <div><span>Assignment link <small>Locked</small></span><a href={ticket.assignmentUrl} target="_blank" rel="noreferrer">Open reference ↗</a></div>}
@@ -358,6 +398,7 @@ export default function TicketsPage({
                   {ticket.checkpoints.length === 0 ? <p className="checkpoint-empty">This ticket has no checkpoints. It can still be completed normally.</p> : <div className="checkpoint-list">{ticket.checkpoints.map((checkpoint) => <div className={checkpoint.completed ? "done" : ""} key={checkpoint.id}><label><input type="checkbox" checked={checkpoint.completed} disabled={busy || !canWorkTicket(ticket)} onChange={() => void toggleCheckpoint(ticket, checkpoint)} /><span>{checkpoint.label}</span></label>{canManageTicket(ticket) && <button type="button" onClick={() => void deleteCheckpoint(ticket, checkpoint)} aria-label={`Delete ${checkpoint.label}`}>×</button>}</div>)}</div>}
                   {canManageTicket(ticket) && <div className="checkpoint-add"><input value={newCheckpoint} maxLength={240} onChange={(event) => setNewCheckpoint(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addCheckpoint(ticket); } }} placeholder="Add a checkpoint" /><button type="button" disabled={busy || !newCheckpoint.trim()} onClick={() => void addCheckpoint(ticket)}>Add</button></div>}
                 </section>
+                <section className="ticket-comments"><header><div><strong>Comments</strong><small>Visible to the sender and assigned members.</small></div><span>{ticket.comments.length}</span></header>{ticket.comments.length > 0 && <div className="ticket-comment-list">{ticket.comments.map((comment) => <article key={comment.id}><div><strong>{comment.authorName}</strong><time>{dateTimeLabel(comment.createdAt)}</time></div><p>{comment.body}</p></article>)}</div>}{canCommentTicket(ticket) && <div className="ticket-comment-compose"><textarea rows={2} maxLength={2000} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a comment for the ticket participants…" /><button type="button" disabled={busy || !commentDraft.trim()} onClick={() => void addComment(ticket)}>Add comment</button></div>}</section>
                 {ticket.assignees.some((assignee) => String(assignee.userId) === String(currentUser.id)) && ticket.status === "completed" && <section className="ticket-completion-link"><div><strong>{ticket.completionUrl ? "Update completed work" : "Add completed work"}</strong><small>Optional. Either assigned member can add the final link after the shared ticket is completed.</small></div><div><input type="url" value={completionDraft} onChange={(event) => setCompletionDraft(event.target.value)} placeholder="https://…" /><button type="button" disabled={busy || !completionDraft.trim()} onClick={() => void submitCompletionLink(ticket)}>{ticket.completionUrl ? "Update link" : "Submit link"}</button></div></section>}
                 <footer className="ticket-detail-footer"><small>Created by {ticket.createdByName} · {dueLabel(ticket.createdAt)}</small>{canManageTicket(ticket) && <div><button type="button" onClick={() => openEdit(ticket)}>Edit ticket</button><button className="danger" type="button" onClick={() => void deleteTicket(ticket)}>Delete</button></div>}</footer>
               </div>}
@@ -376,6 +417,7 @@ export default function TicketsPage({
             <label><span>Client <small>optional</small></span><select value={clientId} onChange={(event) => setClientId(event.target.value)}><option value="">Internal task</option>{clients.filter((client) => client.isActive !== false).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
           </div>
           <label><span>Due date <small>optional</small></span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label>
+          <div className="ticket-form-row"><label><span>Priority</span><select value={ticketPriority} onChange={(event) => setTicketPriority(event.target.value as TicketPriority)}>{Object.entries(PRIORITY_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>Scheduled start <small>optional</small></span><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label></div>
           {!editing && <label><span>Assignment link <small>optional · locked after creation</small></span><input type="url" maxLength={2048} value={assignmentUrl} onChange={(event) => setAssignmentUrl(event.target.value)} placeholder="https://…" /></label>}
           {!editing && <fieldset className="ticket-checkpoint-builder"><legend>Checkpoints <small>optional</small></legend><p>Useful milestones only. Completing them will not change the ticket status.</p>{checkpointDrafts.map((checkpoint, index) => <div key={index}><input maxLength={240} value={checkpoint} onChange={(event) => setCheckpointDrafts((items) => items.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`Checkpoint ${index + 1}`} />{checkpointDrafts.length > 1 && <button type="button" onClick={() => setCheckpointDrafts((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button>}</div>)}<button className="checkpoint-builder-add" type="button" onClick={() => setCheckpointDrafts((items) => [...items, ""])}>＋ Add checkpoint</button></fieldset>}
           {error && <div className="form-error">{error}</div>}

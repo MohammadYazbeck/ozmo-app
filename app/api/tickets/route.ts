@@ -4,6 +4,8 @@ import { enqueueNotification } from "@/lib/notifications";
 
 type TicketStatus = "open" | "in_progress" | "completed";
 const STATUSES = new Set<TicketStatus>(["open", "in_progress", "completed"]);
+type TicketPriority = "normal" | "high" | "very_high";
+const PRIORITIES = new Set<TicketPriority>(["normal", "high", "very_high"]);
 
 type TicketRow = {
   id: number;
@@ -12,7 +14,9 @@ type TicketRow = {
   clientId: number | null;
   clientName: string | null;
   status: TicketStatus;
+  priority: TicketPriority;
   dueAt: string | null;
+  scheduledAt: string | null;
   assignmentUrl: string | null;
   completionUrl: string | null;
   completionUrlAddedAt: string | null;
@@ -33,6 +37,7 @@ type CheckpointRow = {
   completedAt: string | null;
   completedByUserId: number | null;
 };
+type CommentRow = { id: number; ticketId: number; authorUserId: number; authorName: string; body: string; createdAt: string };
 
 function text(value: unknown, maximum: number, field: string, required = false) {
   if (typeof value !== "string") {
@@ -62,6 +67,14 @@ function optionalDueAt(value: unknown) {
     throw new AuthError(400, "INVALID_TICKET", "Due date is invalid.");
   }
   return new Date(value).toISOString();
+}
+
+function priority(value: unknown) {
+  const next = value == null || value === "" ? "normal" : value;
+  if (typeof next !== "string" || !PRIORITIES.has(next as TicketPriority)) {
+    throw new AuthError(400, "INVALID_PRIORITY", "Choose a valid ticket priority.");
+  }
+  return next as TicketPriority;
 }
 
 function optionalUrl(value: unknown, field: string) {
@@ -164,7 +177,8 @@ export async function GET(request: Request) {
       : "AND EXISTS (SELECT 1 FROM ticket_assignees mine WHERE mine.ticket_id=t.id AND mine.user_id=?)";
     const statement = db.prepare(
       `SELECT t.id,t.title,t.description,
-              t.client_id AS clientId,c.name AS clientName,t.status,t.due_at AS dueAt,
+              t.client_id AS clientId,c.name AS clientName,t.status,t.priority,
+              t.due_at AS dueAt,t.scheduled_at AS scheduledAt,
               t.assignment_url AS assignmentUrl,t.completion_url AS completionUrl,
               t.completion_url_added_at AS completionUrlAddedAt,
               t.created_by_user_id AS createdByUserId,creator.display_name AS createdByName,
@@ -174,6 +188,7 @@ export async function GET(request: Request) {
        LEFT JOIN clients c ON c.id=t.client_id
        WHERE t.deleted_at IS NULL ${access}
        ORDER BY CASE t.status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 ELSE 2 END,
+                CASE t.priority WHEN 'very_high' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
                 CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC`,
     );
     const result = scope === "all"
@@ -182,6 +197,7 @@ export async function GET(request: Request) {
     const ids = result.results.map((ticket) => Number(ticket.id));
     let checkpoints: CheckpointRow[] = [];
     let ticketAssignees: AssigneeRow[] = [];
+    let comments: CommentRow[] = [];
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
       const checkpointResult = await db.prepare(
@@ -196,6 +212,13 @@ export async function GET(request: Request) {
          WHERE ta.ticket_id IN (${placeholders}) ORDER BY ta.assigned_at,ta.user_id`,
       ).bind(...ids).all<AssigneeRow>();
       ticketAssignees = assigneeResult.results;
+      const commentResult = await db.prepare(
+        `SELECT tc.id,tc.ticket_id AS ticketId,tc.author_user_id AS authorUserId,
+                u.display_name AS authorName,tc.body,tc.created_at AS createdAt
+         FROM ticket_comments tc JOIN users u ON u.id=tc.author_user_id
+         WHERE tc.ticket_id IN (${placeholders}) ORDER BY tc.created_at,tc.id`,
+      ).bind(...ids).all<CommentRow>();
+      comments = commentResult.results;
     }
     const availableResult = canCreate
       ? await db.prepare("SELECT id,display_name AS displayName,role FROM users WHERE is_active=1 ORDER BY display_name").all<{ id: number; displayName: string; role: string }>()
@@ -210,6 +233,9 @@ export async function GET(request: Request) {
           role: assignee.role,
         })),
         clientId: ticket.clientId == null ? null : String(ticket.clientId),
+        comments: (Number(ticket.createdByUserId) === user.id || ticketAssignees.some((assignee) => Number(assignee.ticketId) === Number(ticket.id) && Number(assignee.userId) === user.id))
+          ? comments.filter((comment) => Number(comment.ticketId) === Number(ticket.id)).map((comment) => ({ ...comment, id: String(comment.id), ticketId: String(comment.ticketId), authorUserId: String(comment.authorUserId) }))
+          : [],
         checkpoints: checkpoints.filter((checkpoint) => Number(checkpoint.ticketId) === Number(ticket.id)).map((checkpoint) => ({
           ...checkpoint,
           id: String(checkpoint.id),
@@ -238,16 +264,18 @@ export async function POST(request: Request) {
     const description = text(body.description, 4000, "Description");
     const assigneeIds = assignedUserIds(body.assignedUserIds);
     const clientId = optionalId(body.clientId, "Client");
+    const ticketPriority = priority(body.priority);
     const dueAt = optionalDueAt(body.dueAt);
+    const scheduledAt = optionalDueAt(body.scheduledAt);
     const assignmentUrl = optionalUrl(body.assignmentUrl, "Assignment link");
     const checkpointLabels = Array.isArray(body.checkpoints)
       ? body.checkpoints.map((value) => text(value, 240, "Checkpoint")).filter(Boolean).slice(0, 50)
       : [];
     await Promise.all([requireActiveUsers(assigneeIds), requireActiveClient(clientId)]);
     const result = await getD1().prepare(
-      `INSERT INTO tickets (title,description,assigned_user_id,client_id,due_at,assignment_url,created_by_user_id)
-       VALUES (?,?,?,?,?,?,?)`,
-    ).bind(title, description, assigneeIds[0], clientId, dueAt, assignmentUrl, creator.id).run();
+      `INSERT INTO tickets (title,description,assigned_user_id,client_id,priority,due_at,scheduled_at,assignment_url,created_by_user_id)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+    ).bind(title, description, assigneeIds[0], clientId, ticketPriority, dueAt, scheduledAt, assignmentUrl, creator.id).run();
     const ticketId = Number(result.meta.last_row_id);
     for (const assigneeId of assigneeIds) {
       await getD1().prepare(
@@ -281,6 +309,33 @@ export async function PATCH(request: Request) {
     const canManage = isAdmin || (user.role === "account_manager" && Number(ticket.createdByUserId) === user.id);
     if (!canManage && !isAssignee) throw new AuthError(403, "TICKET_ACCESS_DENIED", "You cannot update this ticket.");
     const db = getD1();
+
+    if (action === "add_comment") {
+      if (user.id !== Number(ticket.createdByUserId) && !isAssignee) {
+        throw new AuthError(403, "TICKET_COMMENT_DENIED", "Only the ticket sender or assigned members can comment.");
+      }
+      const bodyText = text(body.body, 2000, "Comment", true);
+      await db.prepare(
+        "INSERT INTO ticket_comments (ticket_id,author_user_id,body) VALUES (?,?,?)",
+      ).bind(ticketId, user.id, bodyText).run();
+      await db.prepare("UPDATE tickets SET updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(ticketId).run();
+      await addEvent(ticketId, user.id, "comment_added", bodyText.slice(0, 160));
+      const participants = await db.prepare(
+        `SELECT id FROM users WHERE is_active=1 AND id<>?
+         AND (id=? OR EXISTS (SELECT 1 FROM ticket_assignees ta WHERE ta.ticket_id=? AND ta.user_id=users.id))`,
+      ).bind(user.id, ticket.createdByUserId, ticketId).all<{ id: number }>();
+      const recipientIds = participants.results.map((item) => Number(item.id));
+      if (recipientIds.length) await enqueueNotification({
+        recipientUserIds: recipientIds,
+        kind: "ticket_updated",
+        titleEn: "New ticket comment",
+        titleAr: "تعليق جديد على التذكرة",
+        messageEn: `A new comment was added to ${ticket.title}.`,
+        messageAr: `تمت إضافة تعليق جديد إلى ${ticket.title}.`,
+        dedupeKey: `ticket:${ticketId}:comment:${Date.now()}`,
+      });
+      return Response.json({ ok: true });
+    }
 
     if (action === "status") {
       const status = body.status as TicketStatus;
@@ -385,12 +440,14 @@ export async function PATCH(request: Request) {
       const description = text(body.description, 4000, "Description");
       const nextAssigneeIds = assignedUserIds(body.assignedUserIds);
       const clientId = optionalId(body.clientId, "Client");
+      const ticketPriority = priority(body.priority);
       const dueAt = optionalDueAt(body.dueAt);
+      const scheduledAt = optionalDueAt(body.scheduledAt);
       await Promise.all([requireActiveUsers(nextAssigneeIds), requireActiveClient(clientId)]);
       await db.batch([
         db.prepare(
-          `UPDATE tickets SET title=?,description=?,assigned_user_id=?,client_id=?,due_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-        ).bind(title, description, nextAssigneeIds[0], clientId, dueAt, ticketId),
+          `UPDATE tickets SET title=?,description=?,assigned_user_id=?,client_id=?,priority=?,due_at=?,scheduled_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        ).bind(title, description, nextAssigneeIds[0], clientId, ticketPriority, dueAt, scheduledAt, ticketId),
         db.prepare("DELETE FROM ticket_assignees WHERE ticket_id=?").bind(ticketId),
         ...nextAssigneeIds.map((assigneeId) => db.prepare(
           "INSERT INTO ticket_assignees (ticket_id,user_id,assigned_by_user_id) VALUES (?,?,?)",

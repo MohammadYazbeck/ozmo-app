@@ -495,6 +495,9 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(database, /deleted_at TEXT/);
   assert.match(database, /ensureColumn\(database, "tickets", "assignment_url"/);
   assert.match(database, /ensureColumn\(database, "tickets", "completion_url"/);
+  assert.match(database, /priority TEXT NOT NULL DEFAULT 'normal'/);
+  assert.match(database, /scheduled_at TEXT/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_comments/);
   assert.match(route, /creator\.role !== "admin" && creator\.role !== "account_manager"/);
   assert.match(route, /ids\.length < 1 \|\| ids\.length > 2/);
   assert.match(route, /EXISTS \(SELECT 1 FROM ticket_assignees/);
@@ -502,6 +505,10 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(route, /action === "status"/);
   assert.match(route, /action === "toggle_checkpoint"/);
   assert.match(route, /action === "add_completion_link"/);
+  assert.match(route, /action === "add_comment"/);
+  assert.match(route, /Only the ticket sender or assigned members can comment/);
+  assert.match(route, /assignedUserIds/);
+  assert.match(route, /scheduledAt/);
   assert.match(route, /Only the assigned team member can add the completion link/);
   assert.match(route, /Mark the ticket as completed before adding the completion link/);
   assert.match(route, /completion_link_updated/);
@@ -514,6 +521,9 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(page, /locked after creation/i);
   assert.match(page, /Update completed work/i);
   assert.match(page, /Assigned employee/);
+  assert.match(page, /Very high/);
+  assert.match(page, /Scheduled start/);
+  assert.match(page, /Comments/);
   assert.match(page, /ticket\.assignees\.some/);
   assert.match(app, /\["tickets_mine", "My tickets", "ticket"\]/);
   assert.match(app, /\["tickets_all", "All tickets", "clients"\]/);
