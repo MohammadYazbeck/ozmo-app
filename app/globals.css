@@ -651,6 +651,17 @@ textarea:focus {
   justify-content: space-between;
 }
 
+.sidebar-brand-home {
+  display: flex;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.sidebar-brand-home:hover { opacity: .82; transform: translateY(-1px); }
+
 .mobile-close {
   display: none;
 }

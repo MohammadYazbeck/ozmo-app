@@ -6073,7 +6073,9 @@ function AppShell({
     <div className="app-shell">
       <aside className={`sidebar ${mobileNav ? "mobile-open" : ""}`}>
         <div className="sidebar-top">
-          <Brand />
+          <button className="sidebar-brand-home" type="button" onClick={() => { onSection("home"); setMobileNav(false); }} aria-label="Go to overview">
+            <Brand />
+          </button>
           <button
             className="mobile-close"
             onClick={() => setMobileNav(false)}

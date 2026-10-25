@@ -499,7 +499,8 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(database, /scheduled_at TEXT/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS ticket_comments/);
   assert.match(route, /creator\.role !== "admin" && creator\.role !== "account_manager"/);
-  assert.match(route, /ids\.length < 1 \|\| ids\.length > 2/);
+  assert.match(route, /if \(ids\.length < 1\)/);
+  assert.doesNotMatch(route, /ids\.length > 2/);
   assert.match(route, /EXISTS \(SELECT 1 FROM ticket_assignees/);
   assert.match(route, /isAssignee/);
   assert.match(route, /action === "status"/);
@@ -524,8 +525,11 @@ test("ships role-aware tickets with optional checkpoints and manual status", asy
   assert.match(page, /Very high/);
   assert.match(page, /Scheduled start/);
   assert.match(page, /Comments/);
+  assert.match(page, /choose one or more/);
+  assert.match(route, /actorName.*marked.*completed/s);
   assert.match(page, /ticket\.assignees\.some/);
   assert.match(app, /\["tickets_mine", "My tickets", "ticket"\]/);
   assert.match(app, /\["tickets_all", "All tickets", "clients"\]/);
   assert.match(app, /left\.name\.localeCompare\(right\.name/);
+  assert.match(app, /sidebar-brand-home/);
 });

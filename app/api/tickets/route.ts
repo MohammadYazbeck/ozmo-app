@@ -98,9 +98,9 @@ async function requireActiveUser(userId: number) {
 }
 
 function assignedUserIds(value: unknown) {
-  if (!Array.isArray(value)) throw new AuthError(400, "INVALID_ASSIGNEE", "Choose one or two team members.");
+  if (!Array.isArray(value)) throw new AuthError(400, "INVALID_ASSIGNEE", "Choose at least one team member.");
   const ids = [...new Set(value.map((item) => positiveId(item, "Assigned member")))];
-  if (ids.length < 1 || ids.length > 2) throw new AuthError(400, "INVALID_ASSIGNEE", "Choose one or two team members.");
+  if (ids.length < 1) throw new AuthError(400, "INVALID_ASSIGNEE", "Choose at least one team member.");
   return ids;
 }
 
@@ -145,7 +145,7 @@ async function notifyAssignment(ticketId: number, title: string, assigneeIds: nu
   });
 }
 
-async function notifyAdminsCompleted(ticketId: number, title: string, actorId: number) {
+async function notifyAdminsCompleted(ticketId: number, title: string, actorId: number, actorName: string) {
   const admins = await getD1().prepare(
     `SELECT id FROM users WHERE is_active=1 AND id<>?
      AND (role='admin' OR id=(SELECT created_by_user_id FROM tickets WHERE id=?)
@@ -156,10 +156,10 @@ async function notifyAdminsCompleted(ticketId: number, title: string, actorId: n
   await enqueueNotification({
     recipientUserIds: ids,
     kind: "ticket_completed",
-    titleEn: "Ticket completed",
+    titleEn: `${actorName} completed a ticket`,
     titleAr: "تم إكمال التذكرة",
-    messageEn: `${title} was marked as completed.`,
-    messageAr: `تم تحديد ${title} كمكتملة.`,
+    messageEn: `${actorName} marked ${title} as completed.`,
+    messageAr: `قام ${actorName} بتحديد ${title} كمكتملة.`,
     dedupeKey: `ticket:${ticketId}:completed:${Date.now()}`,
   });
 }
@@ -346,7 +346,7 @@ export async function PATCH(request: Request) {
       ).bind(status, status, ticketId).run();
       await addEvent(ticketId, user.id, "status_changed", `${ticket.status}->${status}`);
       if (status === "completed" && ticket.status !== "completed") {
-        await notifyAdminsCompleted(ticketId, ticket.title, user.id);
+        await notifyAdminsCompleted(ticketId, ticket.title, user.id, user.displayName);
       }
       if (ticket.status === "completed" && status !== "completed") {
         await enqueueNotification({

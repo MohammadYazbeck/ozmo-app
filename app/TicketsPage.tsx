@@ -150,6 +150,11 @@ export default function TicketsPage({
     return [...members.entries()].sort((left, right) => left[1].localeCompare(right[1], "en", { sensitivity: "base" }));
   }, [tickets]);
 
+  const sortedClients = useMemo(
+    () => clients.filter((client) => client.isActive !== false).sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base" })),
+    [clients],
+  );
+
   function clearForm() {
     setEditing(null);
     setTitle("");
@@ -333,7 +338,6 @@ export default function TicketsPage({
   function toggleAssignee(userId: string) {
     setAssigneeIds((current) => {
       if (current.includes(userId)) return current.filter((id) => id !== userId);
-      if (current.length >= 2) return current;
       return [...current, userId];
     });
   }
@@ -413,8 +417,8 @@ export default function TicketsPage({
           <label><span>Ticket name</span><input autoFocus required maxLength={140} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="What needs to be done?" /></label>
           <label><span>Description</span><textarea rows={4} maxLength={4000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Add the context the team member needs…" /></label>
           <div className="ticket-form-row">
-            <fieldset className="ticket-assignee-picker"><legend>Assign to <small>choose up to 2</small></legend>{availableUsers.filter((person) => person.isActive !== false).map((person) => { const id = String(person.id); const selected = assigneeIds.includes(id); return <label className={selected ? "selected" : ""} key={id}><input type="checkbox" checked={selected} disabled={!selected && assigneeIds.length >= 2} onChange={() => toggleAssignee(id)} /><span>{person.displayName}<small>{person.role.replaceAll("_", " ")}</small></span></label>; })}<em>{assigneeIds.length}/2 selected</em></fieldset>
-            <label><span>Client <small>optional</small></span><select value={clientId} onChange={(event) => setClientId(event.target.value)}><option value="">Internal task</option>{clients.filter((client) => client.isActive !== false).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+            <fieldset className="ticket-assignee-picker"><legend>Assign to <small>choose one or more</small></legend>{availableUsers.filter((person) => person.isActive !== false).map((person) => { const id = String(person.id); const selected = assigneeIds.includes(id); return <label className={selected ? "selected" : ""} key={id}><input type="checkbox" checked={selected} onChange={() => toggleAssignee(id)} /><span>{person.displayName}<small>{person.role.replaceAll("_", " ")}</small></span></label>; })}<em>{assigneeIds.length} selected</em></fieldset>
+            <label><span>Client <small>optional</small></span><select value={clientId} onChange={(event) => setClientId(event.target.value)}><option value="">Internal task</option>{sortedClients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
           </div>
           <label><span>Due date <small>optional</small></span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label>
           <div className="ticket-form-row"><label><span>Priority</span><select value={ticketPriority} onChange={(event) => setTicketPriority(event.target.value as TicketPriority)}>{Object.entries(PRIORITY_COPY).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>Scheduled start <small>optional</small></span><input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label></div>
